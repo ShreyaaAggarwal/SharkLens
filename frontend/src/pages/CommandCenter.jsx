@@ -27,34 +27,20 @@ const SHARKS = [
   },
 ]
 
-const AGENTS = {
-  cuban: import.meta.env.VITE_TRUGEN_AGENT_CUBAN,
-  vc: import.meta.env.VITE_TRUGEN_AGENT_VC,
-  angel: import.meta.env.VITE_TRUGEN_AGENT_ANGEL,
-}
-
 export default function CommandCenter() {
   const { config, updateConfig } = useApp()
   const nav = useNavigate()
-
-  const agentId = AGENTS[config.shark]
   const [showPrompt, setShowPrompt] = useState(false)
-
   const selected = SHARKS.find(s => s.id === config.shark) || SHARKS[0]
 
- function proceed() {
-  updateConfig({
-    agentId,
-    apiKey: import.meta.env.VITE_TRUGEN_API_KEY
-  })
-
-  nav('/deck')
-}
+  function proceed() {
+    nav('/deck')
+  }
 
   return (
     <div className="pt-nav" style={{ minHeight:'100vh' }}>
 
-      {/* Page header */}
+      {/* Header */}
       <div className="wrap" style={{ paddingTop:52, paddingBottom:40 }}>
         <div className="eyebrow fu" style={{ marginBottom:14 }}>Step 01 · Command Center</div>
         <h1 className="fu1" style={{
@@ -89,17 +75,15 @@ export default function CommandCenter() {
                     style={{
                       display:'flex', alignItems:'center', gap:16,
                       background: active ? s.mute : 'var(--surface2)',
-                      border: `1.5px solid ${active ? s.color : 'var(--border)'}`,
+                      border:`1.5px solid ${active ? s.color : 'var(--border)'}`,
                       borderRadius:'var(--r-lg)', padding:'16px 18px',
                       cursor:'pointer', transition:'all .2s', textAlign:'left',
-                      position:'relative', overflow:'hidden',
                     }}
                   >
-                    {/* Avatar */}
                     <div style={{
                       width:48, height:48, borderRadius:10, flexShrink:0,
-                      background: active ? `rgba(0,0,0,0.25)` : 'var(--surface3)',
-                      border: `1px solid ${active ? s.color : 'var(--border)'}`,
+                      background: active ? 'rgba(0,0,0,0.25)' : 'var(--surface3)',
+                      border:`1px solid ${active ? s.color : 'var(--border)'}`,
                       display:'flex', alignItems:'center', justifyContent:'center',
                       fontFamily:'var(--f-display)', fontSize:16,
                       color: active ? s.color : 'var(--dim)',
@@ -107,7 +91,6 @@ export default function CommandCenter() {
                       {s.initials}
                     </div>
 
-                    {/* Info */}
                     <div style={{ flex:1 }}>
                       <div style={{ display:'flex', alignItems:'center', gap:10, marginBottom:4 }}>
                         <span style={{
@@ -117,7 +100,7 @@ export default function CommandCenter() {
                         <span style={{
                           fontFamily:'var(--f-mono)', fontSize:9, letterSpacing:1.5,
                           background: active ? s.mute : 'var(--surface3)',
-                          border: `1px solid ${active ? s.color : 'var(--border)'}`,
+                          border:`1px solid ${active ? s.color : 'var(--border)'}`,
                           color: active ? s.color : 'var(--dim)',
                           padding:'2px 7px', borderRadius:20,
                         }}>{s.label}</span>
@@ -134,10 +117,9 @@ export default function CommandCenter() {
                       <div style={{ fontSize:12, color:'var(--dim)', lineHeight:1.4 }}>{s.desc}</div>
                     </div>
 
-                    {/* Check */}
                     <div style={{
                       width:22, height:22, borderRadius:'50%', flexShrink:0,
-                      border: `1.5px solid ${active ? s.color : 'var(--border2)'}`,
+                      border:`1.5px solid ${active ? s.color : 'var(--border2)'}`,
                       background: active ? s.color : 'transparent',
                       display:'flex', alignItems:'center', justifyContent:'center',
                       color:'#fff', fontSize:11, transition:'all .2s',
@@ -161,20 +143,16 @@ export default function CommandCenter() {
                 </button>
               ))}
             </div>
-            <div style={{
-              marginTop:12, fontFamily:'var(--f-mono)', fontSize:11, color:'var(--dim)',
-            }}>
-              {config.difficulty === 'Easy'     && '💚 Encouraging questions. Helpful follow-ups. Great for first practice.'}
-              {config.difficulty === 'Realistic'&& '🟡 Real investor pressure. Limited patience. Standard pitch setting.'}
-              {config.difficulty === 'Hardcore' && '🔴 Maximum aggression. Constant interruptions. No mercy mode.'}
+            <div style={{ marginTop:12, fontFamily:'var(--f-mono)', fontSize:11, color:'var(--dim)' }}>
+              {config.difficulty === 'Easy'      && '💚 Encouraging questions. Helpful follow-ups. Great for first practice.'}
+              {config.difficulty === 'Realistic' && '🟡 Real investor pressure. Limited patience. Standard pitch setting.'}
+              {config.difficulty === 'Hardcore'  && '🔴 Maximum aggression. Constant interruptions. No mercy mode.'}
             </div>
           </div>
 
           {/* Session Settings */}
           <div className="card">
             <div className="card-lbl">Session Settings</div>
-
-            {/* Bilingual */}
             <div style={{
               display:'flex', alignItems:'center', justifyContent:'space-between',
               padding:'10px 0', borderBottom:'1px solid var(--border)',
@@ -188,16 +166,10 @@ export default function CommandCenter() {
               <div className={`tog${config.bilingual?' on':''}`}
                 onClick={() => updateConfig({ bilingual:!config.bilingual })}/>
             </div>
-
-            {/* Duration */}
             <div style={{ paddingTop:14 }}>
-              <div style={{
-                display:'flex', justifyContent:'space-between', marginBottom:10,
-              }}>
+              <div style={{ display:'flex', justifyContent:'space-between', marginBottom:10 }}>
                 <div style={{ fontSize:14, fontWeight:500 }}>Session Duration</div>
-                <div style={{
-                  fontFamily:'var(--f-mono)', fontSize:13, color:'var(--cuban)',
-                }}>
+                <div style={{ fontFamily:'var(--f-mono)', fontSize:13, color:'var(--cuban)' }}>
                   {config.duration} min
                 </div>
               </div>
@@ -213,42 +185,36 @@ export default function CommandCenter() {
             </div>
           </div>
 
-              {/* Preview prompt */}
-              <div>
-                <button
-                  onClick={() => setShowPrompt(p=>!p)}
-                  style={{
-                    background:'none', border:'none', cursor:'pointer',
-                    fontFamily:'var(--f-mono)', fontSize:10, color:'var(--dim)',
-                    padding:0, letterSpacing:1,
-                  }}
-                >
-                  {showPrompt ? '▲ HIDE' : '▼ PREVIEW'} SHARK SYSTEM PROMPT
-                </button>
-                {showPrompt && (
-                  <div style={{
-                    marginTop:10, background:'var(--surface2)',
-                    border:'1px solid var(--border)', borderRadius:'var(--r)',
-                    padding:'12px 14px',
-                    fontFamily:'var(--f-mono)', fontSize:11, color:'var(--sub)',
-                    lineHeight:1.6, maxHeight:160, overflowY:'auto',
-                    whiteSpace:'pre-wrap',
-                  }}>
-                    {sharkPrompt(config.shark, config.difficulty, config.bilingual)}
-                  </div>
-                )}
+          {/* System Prompt Preview */}
+          <div className="card">
+            <button onClick={() => setShowPrompt(p=>!p)} style={{
+              background:'none', border:'none', cursor:'pointer',
+              fontFamily:'var(--f-mono)', fontSize:10, color:'var(--dim)',
+              padding:0, letterSpacing:1,
+            }}>
+              {showPrompt ? '▲ HIDE' : '▼ PREVIEW'} SHARK SYSTEM PROMPT
+            </button>
+            {showPrompt && (
+              <div style={{
+                marginTop:10, background:'var(--surface2)',
+                border:'1px solid var(--border)', borderRadius:'var(--r)',
+                padding:'12px 14px',
+                fontFamily:'var(--f-mono)', fontSize:11, color:'var(--sub)',
+                lineHeight:1.6, maxHeight:160, overflowY:'auto',
+                whiteSpace:'pre-wrap',
+              }}>
+                {sharkPrompt(config.shark, config.difficulty, config.bilingual)}
               </div>
-            </div>
+            )}
           </div>
+
         </div>
-        
-            )
+
         {/* RIGHT — sticky preview */}
         <div style={{ position:'sticky', top:76, alignSelf:'start', display:'flex', flexDirection:'column', gap:16 }}>
           <div className="card">
             <div className="card-lbl">Session Preview</div>
 
-            {/* Selected shark big preview */}
             <div style={{
               background: selected.mute,
               border:`1px solid ${selected.color}`,
@@ -257,7 +223,7 @@ export default function CommandCenter() {
             }}>
               <div style={{
                 width:64, height:64, borderRadius:14, margin:'0 auto 12px',
-                background:`rgba(0,0,0,0.3)`,
+                background:'rgba(0,0,0,0.3)',
                 border:`1.5px solid ${selected.color}`,
                 display:'flex', alignItems:'center', justifyContent:'center',
                 fontFamily:'var(--f-display)', fontSize:22, color:selected.color,
@@ -270,13 +236,12 @@ export default function CommandCenter() {
               </div>
             </div>
 
-            {/* Config summary */}
             {[
-              ['DIFFICULTY',  config.difficulty, config.difficulty==='Hardcore'?'var(--cuban)':config.difficulty==='Easy'?'var(--vc)':'var(--angel)'],
-              ['DURATION',    `${config.duration} min`, 'var(--sub)'],
-              ['LANGUAGE',    config.bilingual ? 'EN + HI' : 'English', 'var(--sub)'],
-              ['ML PIPELINE', '4 Models Active', 'var(--vc)'],
-              ['MCP TOOLS',   '4 Connected', 'var(--vc)'],
+              ['DIFFICULTY', config.difficulty, config.difficulty==='Hardcore'?'var(--cuban)':config.difficulty==='Easy'?'var(--vc)':'var(--angel)'],
+              ['DURATION',   `${config.duration} min`, 'var(--sub)'],
+              ['LANGUAGE',   config.bilingual ? 'EN + HI' : 'English', 'var(--sub)'],
+              ['ML PIPELINE','4 Models Active', 'var(--vc)'],
+              ['MCP TOOLS',  '4 Connected', 'var(--vc)'],
             ].map(([k,v,c]) => (
               <div key={k} style={{
                 display:'flex', justifyContent:'space-between',
@@ -287,7 +252,6 @@ export default function CommandCenter() {
               </div>
             ))}
 
-            {/* ML Pipeline */}
             <div style={{
               marginTop:14, background:'var(--surface2)',
               border:'1px solid var(--border)', borderRadius:'var(--r)',
@@ -313,4 +277,8 @@ export default function CommandCenter() {
             </button>
           </div>
         </div>
+
+      </div>
+    </div>
+  )
 }
