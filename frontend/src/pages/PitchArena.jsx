@@ -1,0 +1,265 @@
+import { useEffect, useRef, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { useApp } from '../context/AppContext'
+import MLSidebar from '../components/MLSidebar'
+import { initML, tickML, finalScore, NONSENSE } from '../services/mlEngine'
+import { embedUrl } from '../services/trugen'
+
+const SHARK_LABEL = { cuban:'MARK CUBAN', vc:'SOFT VC', angel:'INDIAN ANGEL' }
+const SHARK_MODE  = { cuban:'BRUTAL', vc:'VISION', angel:'PRACTICAL' }
+const SHARK_COL   = { cuban:'var(--cuban)', vc:'var(--vc)', angel:'var(--angel)' }
+const SHARK_INI   = { cuban:'MC', vc:'SV', angel:'IA' }
+
+const HINT_POOL = [
+  'Lead with the number: CAC/LTV ratio, then validate with cohort data.',
+  'Don\'t defend — redirect. "Great point, here\'s how we solve that..."',
+  'Drop the filler. Pause. Breathe. Then speak with conviction.',
+  'Cuban wants to know: How does this business make money TODAY?',
+  'State your assumption out loud — it shows rigour, not weakness.',
+  'The market size is wrong. Use a bottom-up approach: users × ARPU.',
+]
+
+export default function PitchArena() {
+  const { config, setSessionData } = useApp()
+  const nav = useNavigate()
+
+  const [ml, setML]                   = useState(initML)
+  const [seconds, setSeconds]         = useState(0)
+  const [hint, setHint]               = useState(null)
+  const [hintVisible, setHintVisible] = useState(false)
+  const [camAllowed, setCamAllowed]   = useState(false)
+  const [camError, setCamError]       = useState(false)
+
+  const videoRef   = useRef()
+  const timerRef   = useRef()
+  const mlRef      = useRef()
+  const mlStateRef = useRef(ml)
+
+  useEffect(() => { mlStateRef.current = ml }, [ml])
+
+  useEffect(() => {
+    timerRef.current = setInterval(() => setSeconds(s => s+1), 1000)
+    return () => clearInterval(timerRef.current)
+  }, [])
+
+  useEffect(() => {
+    mlRef.current = setInterval(() => setML(prev => tickML(prev)), 1400)
+    return () => clearInterval(mlRef.current)
+  }, [])
+
+  useEffect(() => {
+    navigator.mediaDevices?.getUserMedia({ video:true, audio:false })
+      .then(stream => {
+        if (videoRef.current) videoRef.current.srcObject = stream
+        setCamAllowed(true)
+      })
+      .catch(() => setCamError(true))
+    return () => videoRef.current?.srcObject?.getTracks().forEach(t=>t.stop())
+  }, [])
+
+  const recStr     = `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`
+  const shark      = config.shark || 'cuban'
+  const sharkColor = SHARK_COL[shark]
+  const iframeUrl  = embedUrl(config.shark)
+
+  const triggerHint = useCallback(() => {
+    const h = HINT_POOL[Math.floor(Math.random()*HINT_POOL.length)]
+    setHint(h); setHintVisible(true)
+    setTimeout(() => setHintVisible(false), 10000)
+  }, [])
+
+  function endSession() {
+    clearInterval(timerRef.current)
+    clearInterval(mlRef.current)
+    const score = finalScore(mlStateRef.current.history)
+    setSessionData({ ...score, shark, difficulty:config.difficulty, durationSec:seconds })
+    videoRef.current?.srcObject?.getTracks().forEach(t=>t.stop())
+    nav('/scorecard')
+  }
+
+  return (
+    <div style={{ paddingTop:60, height:'100vh', display:'flex', flexDirection:'column' }}>
+
+      {/* Top bar */}
+      <div style={{
+        height:44, borderBottom:'1px solid var(--border)',
+        background:'var(--surface)',
+        display:'flex', alignItems:'center', justifyContent:'space-between',
+        padding:'0 20px', flexShrink:0,
+      }}>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <div className="dot dot-red dot-pulse"/>
+          <span style={{ fontFamily:'var(--f-mono)', fontSize:12 }}>REC {recStr}</span>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:8 }}>
+          <span style={{ fontFamily:'var(--f-mono)', fontSize:10, color:'var(--dim)' }}>SHARK:</span>
+          <span style={{ fontFamily:'var(--f-cond)', fontSize:13, fontWeight:700, color:sharkColor }}>
+            {SHARK_LABEL[shark]} · {SHARK_MODE[shark]}
+          </span>
+          <span style={{ fontFamily:'var(--f-mono)', fontSize:10, color:'var(--dim)', marginLeft:8 }}>
+            DIFFICULTY: {config.difficulty?.toUpperCase()}
+          </span>
+        </div>
+        <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+          <span style={{ fontFamily:'var(--f-mono)', fontSize:10, color:'var(--dim)' }}>SHARK PATIENCE</span>
+          <div style={{ width:100, height:4, background:'var(--surface3)', borderRadius:2, overflow:'hidden' }}>
+            <div style={{
+              height:'100%', width:`${ml.mood}%`,
+              background: ml.mood>50?'var(--vc)':ml.mood>25?'var(--angel)':'var(--cuban)',
+              borderRadius:2, transition:'width .8s ease',
+            }}/>
+          </div>
+          <span style={{ fontFamily:'var(--f-mono)', fontSize:10, color:'var(--sub)' }}>
+            {Math.round(ml.mood)}%
+          </span>
+        </div>
+      </div>
+
+      {/* Main */}
+      <div style={{ flex:1, display:'flex', overflow:'hidden', position:'relative' }}>
+
+        {/* Video area */}
+        <div style={{ flex:1, position:'relative', background:'#090B0F', overflow:'hidden' }}>
+          <div className="scanline"/>
+
+          {iframeUrl ? (
+            <iframe
+              src={iframeUrl}
+              allow="camera;microphone;autoplay;display-capture"
+              style={{ width:'100%', height:'100%', border:'none', position:'absolute', inset:0 }}
+              title="TruGen AI Agent"
+            />
+          ) : (
+            <AgentPlaceholder shark={shark} sharkColor={sharkColor} />
+          )}
+
+          {/* User PIP */}
+          <div style={{
+            position:'absolute', bottom:20, right:20,
+            width:180, height:135, borderRadius:'var(--r-lg)',
+            border:'1.5px solid var(--border2)',
+            overflow:'hidden', background:'#0a0c10', zIndex:20,
+          }}>
+            {camAllowed
+              ? <video ref={videoRef} autoPlay muted playsInline
+                  style={{ width:'100%', height:'100%', objectFit:'cover', transform:'scaleX(-1)' }}/>
+              : <div style={{
+                  width:'100%', height:'100%',
+                  display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+                  gap:6, color:'var(--dim)', fontSize:12, fontFamily:'var(--f-mono)',
+                }}>
+                  <span style={{ fontSize:22, opacity:.4 }}>📷</span>
+                  <span>YOU</span>
+                  {camError && <span style={{ fontSize:9, color:'var(--cuban)' }}>CAM DENIED</span>}
+                </div>
+            }
+            <div style={{
+              position:'absolute', bottom:6, left:8,
+              fontFamily:'var(--f-mono)', fontSize:9, color:'rgba(255,255,255,.5)',
+            }}>YOU</div>
+          </div>
+
+          <NonsensePanel ml={ml} />
+
+          {hint && (
+            <div style={{
+              position:'absolute', top:'50%', left:'50%',
+              transform:'translate(-50%,-50%)',
+              background:'rgba(10,12,16,0.95)',
+              border:'1px solid var(--angel)',
+              borderRadius:'var(--r-xl)', padding:'24px 32px',
+              maxWidth:420, textAlign:'center', zIndex:50,
+              opacity: hintVisible?1:0, transition:'opacity .4s',
+              backdropFilter:'blur(16px)',
+            }}>
+              <div style={{
+                fontFamily:'var(--f-mono)', fontSize:10, color:'var(--angel)',
+                letterSpacing:2, marginBottom:12,
+              }}>⏸ 10-SECOND FREEZE · AI HINT</div>
+              <div style={{ fontSize:16, lineHeight:1.6, color:'var(--text)', fontWeight:300 }}>
+                {hint}
+              </div>
+            </div>
+          )}
+        </div>
+
+        <MLSidebar ml={ml} onHint={triggerHint} onEnd={endSession} />
+      </div>
+    </div>
+  )
+}
+
+function AgentPlaceholder({ shark, sharkColor }) {
+  const ini   = SHARK_INI[shark]
+  const label = SHARK_LABEL[shark]
+  return (
+    <div style={{
+      position:'absolute', inset:0,
+      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+      gap:16,
+      background:`radial-gradient(ellipse 50% 50% at 50% 45%, ${sharkColor}08 0%, transparent 70%)`,
+    }}>
+      <div style={{
+        width:110, height:110, borderRadius:'50%',
+        border:`2px solid ${sharkColor}40`,
+        display:'flex', alignItems:'center', justifyContent:'center',
+        position:'relative',
+      }}>
+        <div style={{
+          position:'absolute', inset:-10, borderRadius:'50%',
+          border:`1px solid ${sharkColor}20`,
+          animation:'pulse 2.5s infinite',
+        }}/>
+        <div style={{ fontFamily:'var(--f-display)', fontSize:36, color:sharkColor }}>{ini}</div>
+      </div>
+      <div>
+        <div style={{
+          fontFamily:'var(--f-cond)', fontSize:18, fontWeight:700,
+          textAlign:'center', color:'var(--text)',
+        }}>{label}</div>
+        <div style={{
+          fontFamily:'var(--f-mono)', fontSize:10, color:'var(--vc)',
+          textAlign:'center', marginTop:4, letterSpacing:2,
+        }}>LISTENING</div>
+      </div>
+      <div style={{ display:'flex', gap:3, alignItems:'flex-end', height:24 }}>
+        {[.3,.7,1,.6,.4].map((h,i) => (
+          <div key={i} style={{
+            width:3, height:`${h*100}%`, background:sharkColor,
+            borderRadius:2, opacity:.7,
+            animation:`waveBar 1.4s ease ${i*.12}s infinite`,
+          }}/>
+        ))}
+      </div>
+      <div style={{
+        fontFamily:'var(--f-mono)', fontSize:10, color:'var(--dim)',
+        border:'1px solid var(--border)', padding:'4px 12px', borderRadius:20,
+      }}>
+        ADD AGENT IDs IN .env TO ACTIVATE TRUGEN
+      </div>
+    </div>
+  )
+}
+
+function NonsensePanel({ ml }) {
+  const ns = NONSENSE[ml.nonsenseIdx] || NONSENSE[0]
+  return (
+    <div style={{
+      position:'absolute', bottom:20, left:20, maxWidth:320,
+      background: ns.alert ? 'rgba(224,82,82,0.12)' : 'rgba(10,12,16,0.75)',
+      border:`1px solid ${ns.alert?'var(--cuban)':'var(--border)'}`,
+      borderRadius:'var(--r-lg)', padding:'10px 14px',
+      backdropFilter:'blur(12px)', zIndex:20, transition:'all .5s',
+    }}>
+      <div style={{
+        fontFamily:'var(--f-mono)', fontSize:9, letterSpacing:2,
+        color: ns.alert?'var(--cuban)':'var(--dim)', marginBottom:5,
+      }}>
+        {ns.alert ? '⚠ NONSENSE DETECTOR' : 'PITCH MONITOR'}
+      </div>
+      <div style={{ fontSize:12, color: ns.alert?'var(--text)':'var(--sub)', lineHeight:1.5 }}>
+        {ns.text}
+      </div>
+    </div>
+  )
+}
