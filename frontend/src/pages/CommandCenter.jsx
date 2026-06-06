@@ -27,20 +27,29 @@ const SHARKS = [
   },
 ]
 
+const AGENTS = {
+  cuban: import.meta.env.VITE_TRUGEN_AGENT_CUBAN,
+  vc: import.meta.env.VITE_TRUGEN_AGENT_VC,
+  angel: import.meta.env.VITE_TRUGEN_AGENT_ANGEL,
+}
+
 export default function CommandCenter() {
   const { config, updateConfig } = useApp()
   const nav = useNavigate()
 
-  const [apiKey, setApiKey]   = useState(import.meta.env.VITE_TRUGEN_API_KEY || '0de547228f7648f1be83428a44865cba')
-  const [agentId, setAgentId] = useState(config.agentId || '')
+  const agentId = AGENTS[config.shark]
   const [showPrompt, setShowPrompt] = useState(false)
 
   const selected = SHARKS.find(s => s.id === config.shark) || SHARKS[0]
 
-  function proceed() {
-    updateConfig({ agentId, apiKey })
-    nav('/deck')
-  }
+ function proceed() {
+  updateConfig({
+    agentId,
+    apiKey: import.meta.env.VITE_TRUGEN_API_KEY
+  })
+
+  nav('/deck')
+}
 
   return (
     <div className="pt-nav" style={{ minHeight:'100vh' }}>
@@ -204,25 +213,6 @@ export default function CommandCenter() {
             </div>
           </div>
 
-          {/* TruGen API Config */}
-          <div className="card">
-            <div className="card-lbl">TruGen API Config</div>
-            <div style={{ display:'flex', flexDirection:'column', gap:12 }}>
-              <div className="field">
-                <label>API Key</label>
-                <input className="input" type="password"
-                  placeholder="0de547228f7648f1be83428a44865cba"
-                  value={apiKey}
-                  onChange={e => setApiKey(e.target.value)}/>
-              </div>
-              <div className="field">
-                <label>Agent ID <span style={{ color:'var(--dim)', fontFamily:'var(--f-body)', fontSize:10, textTransform:'none', letterSpacing:0 }}>(from app.trugen.ai)</span></label>
-                <input className="input"
-                  placeholder="agt_xxxxxxxxxxxx"
-                  value={agentId}
-                  onChange={e => setAgentId(e.target.value)}/>
-              </div>
-
               {/* Preview prompt */}
               <div>
                 <button
@@ -251,7 +241,8 @@ export default function CommandCenter() {
             </div>
           </div>
         </div>
-
+        
+            )
         {/* RIGHT — sticky preview */}
         <div style={{ position:'sticky', top:76, alignSelf:'start', display:'flex', flexDirection:'column', gap:16 }}>
           <div className="card">
@@ -322,8 +313,4 @@ export default function CommandCenter() {
             </button>
           </div>
         </div>
-
-      </div>
-    </div>
-  )
 }
