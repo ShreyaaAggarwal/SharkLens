@@ -85,10 +85,10 @@ export function embedUrl(shark, meta = {}) {
   const agentId = AGENT_IDS[shark] || AGENT_IDS.cuban
   if (!agentId) return null
   const p = new URLSearchParams()
-  if (meta.username) p.set('username', meta.username)
-  if (meta.userId)   p.set('id', meta.userId)
+  p.set('username', meta.username || 'Founder')
+  p.set('id', meta.userId || 'sharklens-user')
   const qs = p.toString()
-  return `https://app.trugen.ai/embed/${agentId}${qs ? '?'+qs : ''}`
+  return `https://app.trugen.ai/embed/${agentId}?${qs}`
 }
 
 

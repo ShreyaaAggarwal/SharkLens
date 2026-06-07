@@ -20,7 +20,7 @@ const HINT_POOL = [
 ]
 
 export default function PitchArena() {
-  const { config, setSessionData } = useApp()
+  const { config, setSessionData, user } = useApp()
   const nav = useNavigate()
 
   const [ml, setML]                   = useState(initML)
@@ -47,7 +47,6 @@ export default function PitchArena() {
     return () => clearInterval(mlRef.current)
   }, [])
 
-  // Camera
   useEffect(() => {
     let stream = null
     async function startCam() {
@@ -72,7 +71,10 @@ export default function PitchArena() {
   const recStr     = `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`
   const shark      = config.shark || 'cuban'
   const sharkColor = SHARK_COL[shark]
-  const iframeUrl  = embedUrl(config.shark)
+  const iframeUrl  = embedUrl(config.shark, {
+    username: user?.name || 'Founder',
+    userId:   user?.email || 'sharklens-user',
+  })
 
   const triggerHint = useCallback(() => {
     const h = HINT_POOL[Math.floor(Math.random()*HINT_POOL.length)]
@@ -133,7 +135,6 @@ export default function PitchArena() {
         <div style={{ flex:1, position:'relative', background:'#090B0F', overflow:'hidden' }}>
           <div className="scanline"/>
 
-          {/* TruGen iframe */}
           {iframeUrl ? (
             <iframe
               src={iframeUrl}
@@ -192,10 +193,8 @@ export default function PitchArena() {
             }}>YOU</div>
           </div>
 
-          {/* Nonsense panel */}
           <NonsensePanel ml={ml} />
 
-          {/* Hint overlay */}
           {hint && (
             <div style={{
               position:'absolute', top:'50%', left:'50%',
@@ -218,7 +217,6 @@ export default function PitchArena() {
           )}
         </div>
 
-        {/* ML Sidebar */}
         <MLSidebar ml={ml} onHint={triggerHint} onEnd={endSession} />
       </div>
     </div>
