@@ -29,6 +29,7 @@ export default function PitchArena() {
   const [hintVisible, setHintVisible] = useState(false)
   const [camAllowed, setCamAllowed]   = useState(false)
   const [camError, setCamError]       = useState(false)
+  const [showPermHint, setShowPermHint] = useState(true)
 
   const videoRef   = useRef()
   const timerRef   = useRef()
@@ -66,6 +67,12 @@ export default function PitchArena() {
     return () => {
       if (stream) stream.getTracks().forEach(t => t.stop())
     }
+  }, [])
+
+  // Hide permission hint after 15s
+  useEffect(() => {
+    const t = setTimeout(() => setShowPermHint(false), 15000)
+    return () => clearTimeout(t)
   }, [])
 
   const recStr     = `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`
@@ -135,6 +142,7 @@ export default function PitchArena() {
         <div style={{ flex:1, position:'relative', background:'#090B0F', overflow:'hidden' }}>
           <div className="scanline"/>
 
+          {/* TruGen iframe */}
           {iframeUrl ? (
             <iframe
               src={iframeUrl}
@@ -147,6 +155,27 @@ export default function PitchArena() {
             />
           ) : (
             <AgentPlaceholder shark={shark} sharkColor={sharkColor} />
+          )}
+
+          {/* Permission hint — fades after 15s */}
+          {showPermHint && (
+            <div style={{
+              position:'absolute', top:16, left:'50%',
+              transform:'translateX(-50%)',
+              background:'rgba(10,12,16,0.88)',
+              border:'1px solid var(--angel)',
+              borderRadius:'var(--r-lg)',
+              padding:'8px 18px',
+              fontFamily:'var(--f-mono)', fontSize:11,
+              color:'var(--angel)',
+              zIndex:25,
+              backdropFilter:'blur(8px)',
+              whiteSpace:'nowrap',
+              pointerEvents:'none',
+              transition:'opacity .5s',
+            }}>
+              ⚡ Click inside video → Allow mic → Continue
+            </div>
           )}
 
           {/* User webcam PIP */}
@@ -195,6 +224,7 @@ export default function PitchArena() {
 
           <NonsensePanel ml={ml} />
 
+          {/* Hint overlay */}
           {hint && (
             <div style={{
               position:'absolute', top:'50%', left:'50%',
