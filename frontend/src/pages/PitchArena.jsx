@@ -137,8 +137,7 @@ export default function PitchArena() {
           {iframeUrl ? (
             <iframe
               src={iframeUrl}
-              allow="camera; microphone; fullscreen; display-capture"
-              allowFullScreen
+              allow="camera *; microphone *; autoplay *; display-capture *; fullscreen *"
               style={{
                 width:'100%', height:'100%', border:'none',
                 position:'absolute', inset:0, zIndex:1,
