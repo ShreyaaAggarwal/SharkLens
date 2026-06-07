@@ -122,16 +122,18 @@ export default function PitchArena() {
         <div style={{ flex:1, position:'relative', background:'#090B0F', overflow:'hidden' }}>
           <div className="scanline"/>
 
-          {iframeUrl ? (
-            <iframe
-              src={iframeUrl}
-              allow="camera;microphone;autoplay;display-capture"
-              style={{ width:'100%', height:'100%', border:'none', position:'absolute', inset:0 }}
-              title="TruGen AI Agent"
-            />
-          ) : (
-            <AgentPlaceholder shark={shark} sharkColor={sharkColor} />
-          )}
+          const iframeUrl = embedUrl(config.shark)
+
+{iframeUrl ? (
+  <iframe
+    src={iframeUrl}
+    allow="camera; microphone; fullscreen; display-capture"
+    style={{ width:'100%', height:'100%', border:'none', position:'absolute', inset:0 }}
+    title="TruGen AI Agent"
+  />
+) : (
+  <AgentPlaceholder shark={shark} sharkColor={sharkColor} />
+)}
 
           {/* User PIP */}
           <div style={{
