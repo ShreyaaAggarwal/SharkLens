@@ -47,14 +47,26 @@ export default function PitchArena() {
     return () => clearInterval(mlRef.current)
   }, [])
 
+  // Camera
   useEffect(() => {
-    navigator.mediaDevices?.getUserMedia({ video:true, audio:false })
-      .then(stream => {
-        if (videoRef.current) videoRef.current.srcObject = stream
-        setCamAllowed(true)
-      })
-      .catch(() => setCamError(true))
-    return () => videoRef.current?.srcObject?.getTracks().forEach(t=>t.stop())
+    let stream = null
+    async function startCam() {
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({ video:true, audio:false })
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream
+          await videoRef.current.play()
+          setCamAllowed(true)
+        }
+      } catch(e) {
+        console.error('Camera error:', e)
+        setCamError(true)
+      }
+    }
+    startCam()
+    return () => {
+      if (stream) stream.getTracks().forEach(t => t.stop())
+    }
   }, [])
 
   const recStr     = `${String(Math.floor(seconds/60)).padStart(2,'0')}:${String(seconds%60).padStart(2,'0')}`
@@ -73,7 +85,6 @@ export default function PitchArena() {
     clearInterval(mlRef.current)
     const score = finalScore(mlStateRef.current.history)
     setSessionData({ ...score, shark, difficulty:config.difficulty, durationSec:seconds })
-    videoRef.current?.srcObject?.getTracks().forEach(t=>t.stop())
     nav('/scorecard')
   }
 
@@ -122,52 +133,75 @@ export default function PitchArena() {
         <div style={{ flex:1, position:'relative', background:'#090B0F', overflow:'hidden' }}>
           <div className="scanline"/>
 
-          const iframeUrl = embedUrl(config.shark)
+          {/* TruGen iframe */}
+          {iframeUrl ? (
+            <iframe
+              src={iframeUrl}
+              allow="camera; microphone; fullscreen; display-capture"
+              allowFullScreen
+              style={{
+                width:'100%', height:'100%', border:'none',
+                position:'absolute', inset:0, zIndex:1,
+              }}
+              title="TruGen AI Agent"
+            />
+          ) : (
+            <AgentPlaceholder shark={shark} sharkColor={sharkColor} />
+          )}
 
-{iframeUrl ? (
-  <iframe
-    src={iframeUrl}
-    allow="camera; microphone; fullscreen; display-capture"
-    style={{ width:'100%', height:'100%', border:'none', position:'absolute', inset:0 }}
-    title="TruGen AI Agent"
-  />
-) : (
-  <AgentPlaceholder shark={shark} sharkColor={sharkColor} />
-)}
-
-          {/* User PIP */}
+          {/* User webcam PIP */}
           <div style={{
             position:'absolute', bottom:20, right:20,
-            width:180, height:135, borderRadius:'var(--r-lg)',
-            border:'1.5px solid var(--border2)',
-            overflow:'hidden', background:'#0a0c10', zIndex:20,
+            width:200, height:150,
+            borderRadius:'var(--r-lg)',
+            border:'2px solid var(--border2)',
+            overflow:'hidden',
+            background:'#0a0c10',
+            zIndex:30,
+            boxShadow:'0 4px 20px rgba(0,0,0,0.5)',
           }}>
-            {camAllowed
-              ? <video ref={videoRef} autoPlay muted playsInline
-                  style={{ width:'100%', height:'100%', objectFit:'cover', transform:'scaleX(-1)' }}/>
-              : <div style={{
-                  width:'100%', height:'100%',
-                  display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
-                  gap:6, color:'var(--dim)', fontSize:12, fontFamily:'var(--f-mono)',
-                }}>
-                  <span style={{ fontSize:22, opacity:.4 }}>📷</span>
-                  <span>YOU</span>
-                  {camError && <span style={{ fontSize:9, color:'var(--cuban)' }}>CAM DENIED</span>}
-                </div>
-            }
+            <video
+              ref={videoRef}
+              autoPlay
+              muted
+              playsInline
+              style={{
+                width:'100%', height:'100%',
+                objectFit:'cover',
+                transform:'scaleX(-1)',
+                display: camAllowed ? 'block' : 'none',
+              }}
+            />
+            {!camAllowed && (
+              <div style={{
+                width:'100%', height:'100%',
+                display:'flex', flexDirection:'column',
+                alignItems:'center', justifyContent:'center',
+                gap:6, color:'var(--dim)', fontSize:12,
+                fontFamily:'var(--f-mono)',
+              }}>
+                <span style={{ fontSize:24, opacity:.4 }}>📷</span>
+                <span>{camError ? 'CAM DENIED' : 'LOADING...'}</span>
+              </div>
+            )}
             <div style={{
               position:'absolute', bottom:6, left:8,
-              fontFamily:'var(--f-mono)', fontSize:9, color:'rgba(255,255,255,.5)',
+              fontFamily:'var(--f-mono)', fontSize:9,
+              color:'rgba(255,255,255,.6)',
+              background:'rgba(0,0,0,.4)',
+              padding:'2px 6px', borderRadius:4,
             }}>YOU</div>
           </div>
 
+          {/* Nonsense panel */}
           <NonsensePanel ml={ml} />
 
+          {/* Hint overlay */}
           {hint && (
             <div style={{
               position:'absolute', top:'50%', left:'50%',
               transform:'translate(-50%,-50%)',
-              background:'rgba(10,12,16,0.95)',
+              background:'rgba(10,12,16,0.96)',
               border:'1px solid var(--angel)',
               borderRadius:'var(--r-xl)', padding:'24px 32px',
               maxWidth:420, textAlign:'center', zIndex:50,
@@ -185,6 +219,7 @@ export default function PitchArena() {
           )}
         </div>
 
+        {/* ML Sidebar */}
         <MLSidebar ml={ml} onHint={triggerHint} onEnd={endSession} />
       </div>
     </div>
@@ -197,7 +232,8 @@ function AgentPlaceholder({ shark, sharkColor }) {
   return (
     <div style={{
       position:'absolute', inset:0,
-      display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
+      display:'flex', flexDirection:'column',
+      alignItems:'center', justifyContent:'center',
       gap:16,
       background:`radial-gradient(ellipse 50% 50% at 50% 45%, ${sharkColor}08 0%, transparent 70%)`,
     }}>
