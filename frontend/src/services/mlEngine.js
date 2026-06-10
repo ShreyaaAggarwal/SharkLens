@@ -92,3 +92,34 @@ export function finalScore(mlHistory = []) {
     history: mlHistory,
   }
 }
+export function startRealFillerDetection(onFillerDetected) {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    console.warn('[ML] Web Speech API not supported')
+    return null
+  }
+
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
+  const recognition = new SpeechRecognition()
+  recognition.continuous = true
+  recognition.interimResults = true
+  recognition.lang = 'en-IN'
+
+  const FILLER_SET = new Set(['umm', 'um', 'uh', 'like', 'actually', 'so', 'basically', 'you know', 'right', 'literally'])
+
+  recognition.onresult = (event) => {
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      const transcript = event.results[i][0].transcript.toLowerCase().trim()
+      transcript.split(/\s+/).forEach(word => {
+        const clean = word.replace(/[^a-z\s]/g, '')
+        if (FILLER_SET.has(clean)) onFillerDetected(clean)
+      })
+    }
+  }
+
+  recognition.onerror = (e) => {
+    if (e.error !== 'no-speech') console.warn('[ML] Speech error:', e.error)
+  }
+
+  try { recognition.start() } catch (e) {}
+  return recognition
+}

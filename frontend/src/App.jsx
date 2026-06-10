@@ -14,12 +14,7 @@ function Guard({ children }) {
 }
 
 function Layout({ children }) {
-  return (
-    <>
-      <Nav />
-      {children}
-    </>
-  )
+  return <><Nav />{children}</>
 }
 
 function AppRoutes() {
