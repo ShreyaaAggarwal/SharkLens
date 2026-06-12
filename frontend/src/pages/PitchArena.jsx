@@ -52,7 +52,6 @@ const HINT_POOL = [
 ]
 
 // ─── Boardroom layout config ───────────────────────────────────────────────────
-// Main active shark takes ~65% width; participant strip sits below/beside it.
 const BOARDROOM_STYLES = {
   wrapper: {
     display: 'flex',
@@ -67,20 +66,35 @@ const BOARDROOM_STYLES = {
     flex: 1,
     position: 'relative',
     overflow: 'hidden',
+    minHeight: 0,
     borderRadius: 0,
+    transition: 'box-shadow .4s ease',
   },
   participantStrip: {
     display: 'flex',
     flexDirection: 'row',
-    gap: 6,
-    padding: '6px 12px',
-    background: 'rgba(10,12,16,0.9)',
+    gap: 8,
+    padding: '8px 12px',
+    background: 'rgba(10,12,16,0.92)',
     borderTop: '1px solid var(--border)',
     flexShrink: 0,
     alignItems: 'center',
     overflowX: 'auto',
+    minHeight: 64,
   },
 }
+
+// Pulsing glow for active speaker's main panel + badge fade-in
+const GLOW_KEYFRAMES = `
+@keyframes boardroomGlowPulse {
+  0%, 100% { box-shadow: inset 0 0 0 2px var(--glow), 0 0 26px 2px var(--glow-soft); }
+  50%      { box-shadow: inset 0 0 0 2px var(--glow), 0 0 42px 8px var(--glow-soft); }
+}
+@keyframes badgeFade {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+`
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
@@ -144,12 +158,12 @@ export default function PitchArena() {
   // Boardroom: rotate active shark every 45s
   useEffect(() => {
     if (config.sessionMode !== 'boardroom') return
-    const sharks = config.boardroomSharks || ['cuban', 'angel']
+    const sharks = config.boardroomSharks || config.selectedSharks || ['cuban', 'angel']
     const iv = setInterval(() => {
       setActiveSharkIdx(i => (i + 1) % sharks.length)
     }, 45000)
     return () => clearInterval(iv)
-  }, [config.sessionMode, config.boardroomSharks])
+  }, [config.sessionMode, config.boardroomSharks, config.selectedSharks])
 
   useEffect(() => {
     const t = setTimeout(() => setShowPermHint(false), 15000)
@@ -159,7 +173,7 @@ export default function PitchArena() {
   // ── Derived values ─────────────────────────────────────────────────────────
   const recStr      = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
   const isBoardroom = config.sessionMode === 'boardroom'
-  const boardSharks = config.boardroomSharks || ['cuban', 'angel']
+  const boardSharks = config.boardroomSharks || config.selectedSharks || ['cuban', 'angel']
   const activeShark = isBoardroom ? boardSharks[activeSharkIdx] : (config.shark || 'cuban')
   const sharkColor  = SHARK_COL[activeShark]
 
@@ -299,7 +313,7 @@ function TopBar({ recStr, isBoardroom, boardSharks, activeSharkIdx, activeShark,
             fontFamily: 'var(--f-mono)', fontSize: 9, letterSpacing: 1.5,
             background: 'rgba(229,9,20,0.1)', border: '1px solid var(--cuban)',
             color: 'var(--cuban)', padding: '2px 8px', borderRadius: 20, marginLeft: 8,
-          }}>⚡ BOARDROOM</span>
+          }}>⚡ BOARDROOM · {boardSharks.length} SHARKS</span>
         )}
       </div>
 
@@ -348,7 +362,6 @@ function TopBar({ recStr, isBoardroom, boardSharks, activeSharkIdx, activeShark,
 }
 
 // ─── Solo Shark Layout ────────────────────────────────────────────────────────
-// Single investor: iframe fills the entire video pane. No custom camera element.
 
 function SoloSharkLayout({ iframeUrl, shark, sharkColor }) {
   return (
@@ -368,31 +381,27 @@ function SoloSharkLayout({ iframeUrl, shark, sharkColor }) {
 }
 
 // ─── Boardroom Layout ─────────────────────────────────────────────────────────
-// Multiple investors visible simultaneously.
-//
-// Layout:
-//   ┌─────────────────────────────────────┐
-//   │                                     │
-//   │      ACTIVE SHARK  (main slot)      │
-//   │      TruGen iframe fills this       │
-//   │                                     │
-//   └─────────────────────────────────────┘
-//   ┌──────────┐ ┌──────────┐ ┌──────────┐
-//   │ Shark B  │ │ Shark C  │ │ Shark D  │  ← participant strip
-//   └──────────┘ └──────────┘ └──────────┘
-//
-// Each participant card shows the shark's identity. Clicking it makes them active.
-// TruGen only renders the currently active shark iframe (one session at a time).
-// Participant cards are styled placeholders that rotate in on click or auto-rotate.
+// Google Meet / Zoom style:
+//   - Large main slot = currently active/speaking shark (TruGen iframe)
+//   - Bottom strip = ALL other selected sharks + Founder tile, always visible
+//   - Clicking a participant card switches the active speaker (no route change)
 
 function BoardroomLayout({ boardSharks, activeSharkIdx, setActiveSharkIdx, user, iframeUrl, activeShark, sharkColor }) {
   const participants = boardSharks.filter((_, i) => i !== activeSharkIdx)
 
   return (
     <div style={BOARDROOM_STYLES.wrapper}>
+      <style>{GLOW_KEYFRAMES}</style>
 
       {/* ── Main active shark slot ── */}
-      <div style={BOARDROOM_STYLES.mainSlot}>
+      <div
+        style={{
+          ...BOARDROOM_STYLES.mainSlot,
+          '--glow': sharkColor,
+          '--glow-soft': `${sharkColor}55`,
+          animation: 'boardroomGlowPulse 2.6s ease-in-out infinite',
+        }}
+      >
         {iframeUrl ? (
           <iframe
             key={activeShark} // remount iframe when active shark changes
@@ -405,55 +414,66 @@ function BoardroomLayout({ boardSharks, activeSharkIdx, setActiveSharkIdx, user,
           <AgentPlaceholder shark={activeShark} sharkColor={sharkColor} />
         )}
 
-        {/* Active label overlay */}
+        {/* Active badge + speaking indicator */}
         <div style={{
           position: 'absolute', top: 12, left: 12,
-          background: 'rgba(10,12,16,0.82)', border: `1px solid ${sharkColor}`,
-          borderRadius: 'var(--r-lg)', padding: '5px 12px',
+          background: 'rgba(10,12,16,0.85)', border: `1px solid ${sharkColor}`,
+          borderRadius: 'var(--r-lg)', padding: '6px 14px',
           fontFamily: 'var(--f-mono)', fontSize: 10, color: sharkColor,
           backdropFilter: 'blur(8px)', zIndex: 10,
-          display: 'flex', alignItems: 'center', gap: 6,
+          display: 'flex', alignItems: 'center', gap: 8,
+          letterSpacing: 1.5, animation: 'badgeFade .3s ease',
         }}>
           <span style={{
-            width: 6, height: 6, borderRadius: '50%',
+            width: 7, height: 7, borderRadius: '50%',
             background: sharkColor, display: 'inline-block',
             animation: 'pulse 1.5s infinite',
+            boxShadow: `0 0 8px ${sharkColor}`,
           }} />
-          {SHARK_LABEL[activeShark]} · SPEAKING
+          {SHARK_LABEL[activeShark]} · ACTIVE · SPEAKING
+        </div>
+
+        {/* Investor count badge */}
+        <div style={{
+          position: 'absolute', bottom: 12, right: 12,
+          background: 'rgba(10,12,16,0.85)', border: '1px solid var(--border)',
+          borderRadius: 'var(--r-lg)', padding: '4px 10px',
+          fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--dim)',
+          letterSpacing: 1.5, zIndex: 10, backdropFilter: 'blur(8px)',
+        }}>
+          {boardSharks.length} INVESTOR{boardSharks.length > 1 ? 'S' : ''} ON CALL
         </div>
       </div>
 
-      {/* ── Participant strip (all non-active sharks) ── */}
-      {participants.length > 0 && (
-        <div style={BOARDROOM_STYLES.participantStrip}>
-          <span style={{
-            fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--dim)',
-            letterSpacing: 1.5, marginRight: 4, whiteSpace: 'nowrap', flexShrink: 0,
-          }}>
-            PANEL
-          </span>
+      {/* ── Participant strip: every non-active shark + founder, ALWAYS visible ── */}
+      <div style={BOARDROOM_STYLES.participantStrip}>
+        <span style={{
+          fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--dim)',
+          letterSpacing: 1.5, marginRight: 4, whiteSpace: 'nowrap', flexShrink: 0,
+        }}>
+          PANEL
+        </span>
 
-          {participants.map((s) => {
-            const originalIdx = boardSharks.indexOf(s)
-            const col = SHARK_COL[s]
-            return (
-              <ParticipantCard
-                key={s}
-                shark={s}
-                sharkColor={col}
-                onClick={() => setActiveSharkIdx(originalIdx)}
-              />
-            )
-          })}
-        </div>
-      )}
+        {participants.map((s) => {
+          const originalIdx = boardSharks.indexOf(s)
+          return (
+            <ParticipantCard
+              key={s}
+              shark={s}
+              sharkColor={SHARK_COL[s]}
+              onClick={() => setActiveSharkIdx(originalIdx)}
+            />
+          )
+        })}
+
+        <FounderCard user={user} />
+      </div>
     </div>
   )
 }
 
 // ─── Participant Card ─────────────────────────────────────────────────────────
-// Shown in the strip for each non-active shark.
-// Clicking a card makes that shark the active speaker.
+// Shown in the strip for each non-active shark. Click to make active.
 
 function ParticipantCard({ shark, sharkColor, onClick }) {
   const [hovered, setHovered] = useState(false)
@@ -513,8 +533,67 @@ function ParticipantCard({ shark, sharkColor, onClick }) {
   )
 }
 
+// ─── Founder Card ──────────────────────────────────────────────────────────────
+// Always-visible tile representing the pitching founder (you), in the strip.
+
+function FounderCard({ user }) {
+  const name = user?.name || 'Founder'
+  const initials = name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(w => w[0].toUpperCase())
+    .join('')
+
+  return (
+    <div
+      title="You — Founder"
+      style={{
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '6px 12px',
+        background: 'rgba(46,204,113,0.06)',
+        border: '1px solid rgba(46,204,113,0.35)',
+        borderRadius: 'var(--r-lg)',
+        flexShrink: 0,
+        minWidth: 130,
+      }}
+    >
+      <div style={{
+        width: 32, height: 32, borderRadius: '50%',
+        background: 'rgba(46,204,113,0.15)',
+        border: '1px solid rgba(46,204,113,0.5)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0,
+      }}>
+        <span style={{ fontFamily: 'var(--f-display)', fontSize: 11, color: 'var(--vc)' }}>
+          {initials || 'YOU'}
+        </span>
+      </div>
+
+      <div>
+        <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--sub)', lineHeight: 1 }}>
+          {name}
+        </div>
+        <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--vc)', marginTop: 2 }}>
+          YOU · FOUNDER
+        </div>
+      </div>
+
+      {/* Mic-on indicator */}
+      <div style={{ marginLeft: 'auto', display: 'flex', gap: 2, alignItems: 'flex-end', height: 14 }}>
+        {[0.5, 0.8, 1, 0.6, 0.4].map((h, i) => (
+          <div key={i} style={{
+            width: 2, height: `${h * 100}%`,
+            background: 'var(--vc)', borderRadius: 1, opacity: 0.6,
+            animation: `waveBar 1.6s ease ${i * 0.15}s infinite`,
+          }} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
 // ─── Agent Placeholder ────────────────────────────────────────────────────────
-// Shown when no TruGen iframe URL is available (missing env vars).
 
 function AgentPlaceholder({ shark, sharkColor }) {
   const ini   = SHARK_INI[shark]
