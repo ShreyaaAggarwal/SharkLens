@@ -2,6 +2,16 @@ import RadarChart from './RadarChart'
 import Sparkline  from './Sparkline'
 import { EMOTION_COLOR, MCP_TEXTS, NONSENSE } from '../services/mlEngine'
 
+// MLSidebar: SHARK_LABEL 
+const SHARK_LABEL = {
+  cuban: 'MARK CUBAN',
+  vc:    'PRIYA SHARMA',
+  angel: 'SUNITA AGARWAL',
+  nikhil:'NIKHIL KAMATH',
+  anupam:'ANUPAM MITTAL',
+  aman:  'AMAN GUPTA',
+}
+
 export default function MLSidebar({ ml, onHint, onEnd }) {
   const conf    = Math.round(ml.confidence)
   const confCol = conf >= 70 ? 'var(--vc)' : conf >= 50 ? 'var(--angel)' : 'var(--cuban)'

@@ -6,36 +6,35 @@ import { initML, tickML, finalScore, NONSENSE, startRealFillerDetection } from '
 import { embedUrl } from '../services/trugen'
 
 const SHARK_LABEL = {
-  cuban: 'MARK CUBAN', vc: 'SOFT VC', angel: 'INDIAN ANGEL',
-  nikhil: 'NIKHIL KAMATH', anupam: 'ANUPAM MITTAL', aman: 'AMAN GUPTA',
+  cuban: 'MARK CUBAN', vc:'PRIYA SHARMA', angel:'SUNITA AGARWAL',
+  nikhil:'NIKHIL KAMATH', anupam:'ANUPAM MITTAL', aman:'AMAN GUPTA',
 }
 const SHARK_MODE = {
-  cuban: 'BRUTAL', vc: 'VISION', angel: 'PRACTICAL',
-  nikhil: 'CONTRARIAN', anupam: 'BRAND', aman: 'D2C',
+  cuban:'BRUTAL', vc:'VISION', angel:'PRACTICAL',
+  nikhil:'PHILOSOPHER', anupam:'BRAND', aman:'D2C',
 }
 const SHARK_COL = {
-  cuban: 'var(--cuban)', vc: 'var(--vc)', angel: 'var(--angel)',
-  nikhil: '#8B5CF6', anupam: '#06B6D4', aman: '#F97316',
+  cuban:'var(--cuban)', vc:'var(--vc)', angel:'var(--angel)',
+  nikhil:'var(--vc)', anupam:'var(--angel)', aman:'var(--cuban)',
 }
 const SHARK_INI = {
-  cuban: 'MC', vc: 'SV', angel: 'IA',
-  nikhil: 'NK', anupam: 'AM', aman: 'AG',
+  cuban:'MC', vc:'PS', angel:'SA',
+  nikhil:'NK', anupam:'AM', aman:'AG',
 }
 
-// How long each shark stays "active" (speaking) in boardroom mode
-const BOARDROOM_TURN_MS = 45000 // 45 seconds per shark turn
-
 const HINT_POOL = [
-  'Try to use a real number — even a rough estimate is better than "a lot".',
-  'Take a breath before answering. It\'s okay to pause and think.',
-  'If you don\'t know an exact number, say "I don\'t have the exact figure yet, but here\'s my estimate..."',
-  'Refer back to your deck — mention the specific stat you wrote down.',
-  'It\'s okay to say "great question, let me think" — that\'s normal.',
-  'Try explaining it like you would to a friend, not an investor.',
+  'Lead with the number: CAC/LTV ratio, then validate with cohort data.',
+  'Don\'t defend — redirect. "Great point, here\'s how we solve that..."',
+  'Drop the filler. Pause. Breathe. Then speak with conviction.',
+  'Cuban wants to know: How does this business make money TODAY?',
+  'State your assumption out loud — it shows rigour, not weakness.',
+  'The market size is wrong. Use bottom-up: users × ARPU.',
+  'Name a specific competitor and explain exactly why you win.',
+  'If you don\'t know the number, say you\'ll follow up. Never guess.',
 ]
 
 export default function PitchArena() {
-  const { config, setSessionData, user, deckIntelligence } = useApp()
+  const { config, setSessionData, user, deckIntelligence, setTranscript } = useApp()
   const nav = useNavigate()
 
   const [ml, setML]                     = useState(initML)
@@ -45,53 +44,57 @@ export default function PitchArena() {
   const [camAllowed, setCamAllowed]     = useState(false)
   const [camError, setCamError]         = useState(false)
   const [showPermHint, setShowPermHint] = useState(true)
+  const [activeSharkIdx, setActiveSharkIdx] = useState(0) // for boardroom mode
 
-  // Boardroom turn-taking state
-  const [activeSharkIdx, setActiveSharkIdx] = useState(0)
-
-  const videoRef   = useRef()
-  const timerRef   = useRef()
-  const mlRef      = useRef()
-  const turnRef    = useRef()
-  const mlStateRef = useRef(ml)
-  const speechRef  = useRef(null)
+  const videoRef      = useRef()
+  const timerRef      = useRef()
+  const mlRef         = useRef()
+  const mlStateRef    = useRef(ml)
+  const speechRef     = useRef(null)
+  const transcriptRef = useRef('')
 
   useEffect(() => { mlStateRef.current = ml }, [ml])
 
+  // Timer
   useEffect(() => {
     timerRef.current = setInterval(() => setSeconds(s => s + 1), 1000)
     return () => clearInterval(timerRef.current)
   }, [])
 
+  // ML tick
   useEffect(() => {
     mlRef.current = setInterval(() => setML(prev => tickML(prev)), 1400)
     return () => clearInterval(mlRef.current)
   }, [])
 
-  // Boardroom turn rotation — only ONE shark is live (iframe) at a time
-  const isBoardroom  = config.sessionMode === 'boardroom'
-  const boardSharks  = config.boardroomSharks || ['cuban', 'angel']
-
+  // Real filler detection via Web Speech API
   useEffect(() => {
-    if (!isBoardroom) return
-    turnRef.current = setInterval(() => {
-      setActiveSharkIdx(prev => (prev + 1) % boardSharks.length)
-    }, BOARDROOM_TURN_MS)
-    return () => clearInterval(turnRef.current)
-  }, [isBoardroom, boardSharks.length])
-
-  useEffect(() => {
-    const recognition = startRealFillerDetection((word) => {
-      setML(prev => ({
-        ...prev,
-        fillerCounts: { ...prev.fillerCounts, [word]: (prev.fillerCounts[word] || 0) + 1 },
-        fillerDensity: Math.min(8, prev.fillerDensity + 0.3),
-      }))
+    const recognition = startRealFillerDetection((word, fullTranscript) => {
+      // ← CHANGED: guard against null word (transcript-only calls)
+      if (word) {
+        setML(prev => ({
+          ...prev,
+          fillerCounts: {
+            ...prev.fillerCounts,
+            [word]: (prev.fillerCounts[word] || 0) + 1,
+          },
+          fillerDensity: Math.min(8, prev.fillerDensity + 0.3),
+        }))
+      }
+      // accumulate full transcript
+      if (fullTranscript) {
+        transcriptRef.current += ' ' + fullTranscript
+      }
     })
     speechRef.current = recognition
-    return () => { if (speechRef.current) { try { speechRef.current.stop() } catch {} } }
+    return () => {
+      if (speechRef.current) {
+        try { speechRef.current.stop() } catch {}
+      }
+    }
   }, [])
 
+  // Camera
   useEffect(() => {
     let stream = null
     async function startCam() {
@@ -110,19 +113,31 @@ export default function PitchArena() {
     return () => { if (stream) stream.getTracks().forEach(t => t.stop()) }
   }, [])
 
+  // Boardroom: rotate active shark every 45s
+  useEffect(() => {
+    if (config.sessionMode !== 'boardroom') return
+    const sharks = config.boardroomSharks || ['cuban', 'angel']
+    const iv = setInterval(() => {
+      setActiveSharkIdx(i => (i + 1) % sharks.length)
+    }, 45000)
+    return () => clearInterval(iv)
+  }, [config.sessionMode, config.boardroomSharks])
+
   useEffect(() => {
     const t = setTimeout(() => setShowPermHint(false), 15000)
     return () => clearTimeout(t)
   }, [])
 
-  const recStr      = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
+  const recStr     = `${String(Math.floor(seconds / 60)).padStart(2, '0')}:${String(seconds % 60).padStart(2, '0')}`
+  const isBoardroom = config.sessionMode === 'boardroom'
+  const boardSharks = config.boardroomSharks || ['cuban', 'angel']
   const shark       = isBoardroom ? boardSharks[activeSharkIdx] : (config.shark || 'cuban')
   const sharkColor  = SHARK_COL[shark]
 
-  // Seconds remaining in current boardroom turn
-  const turnSecsRemaining = isBoardroom
-    ? Math.max(0, BOARDROOM_TURN_MS / 1000 - (seconds % (BOARDROOM_TURN_MS / 1000)))
-    : null
+  const iframeUrl = embedUrl(shark, {
+    username: user?.name || 'Founder',
+    userId:   user?.email || 'sharklens-user',
+  })
 
   const triggerHint = useCallback(() => {
     const h = HINT_POOL[Math.floor(Math.random() * HINT_POOL.length)]
@@ -133,9 +148,9 @@ export default function PitchArena() {
   function endSession() {
     clearInterval(timerRef.current)
     clearInterval(mlRef.current)
-    clearInterval(turnRef.current)
     if (speechRef.current) { try { speechRef.current.stop() } catch {} }
     const score = finalScore(mlStateRef.current.history)
+    setTranscript(transcriptRef.current.trim())
     setSessionData({ ...score, shark, difficulty: config.difficulty, durationSec: seconds })
     nav('/scorecard')
   }
@@ -145,8 +160,10 @@ export default function PitchArena() {
 
       {/* Top bar */}
       <div style={{
-        height: 44, borderBottom: '1px solid var(--border)', background: 'var(--surface)',
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 20px', flexShrink: 0,
+        height: 44, borderBottom: '1px solid var(--border)',
+        background: 'var(--surface)',
+        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+        padding: '0 20px', flexShrink: 0,
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <div className="dot dot-red dot-pulse" />
@@ -156,30 +173,39 @@ export default function PitchArena() {
               fontFamily: 'var(--f-mono)', fontSize: 9, letterSpacing: 1.5,
               background: 'rgba(229,9,20,0.1)', border: '1px solid var(--cuban)',
               color: 'var(--cuban)', padding: '2px 8px', borderRadius: 20, marginLeft: 8,
-            }}>⚡ BOARDROOM · {boardSharks.length} SHARKS</span>
+            }}>⚡ BOARDROOM</span>
           )}
         </div>
 
-        {/* Active shark label — shown in both modes */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--dim)' }}>
-            {isBoardroom ? 'SPEAKING:' : 'SHARK:'}
-          </span>
-          <span style={{ fontFamily: 'var(--f-display)', fontSize: 14, letterSpacing: .5, color: sharkColor }}>
-            {SHARK_LABEL[shark]} · {SHARK_MODE[shark]}
-          </span>
-          {isBoardroom && turnSecsRemaining !== null && (
-            <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--dim)', marginLeft: 4 }}>
-              ({Math.ceil(turnSecsRemaining)}s)
+        {/* Boardroom shark tabs */}
+        {isBoardroom ? (
+          <div style={{ display: 'flex', gap: 6 }}>
+            {boardSharks.map((s, i) => (
+              <div key={s} style={{
+                padding: '4px 12px', borderRadius: 20,
+                background: i === activeSharkIdx ? SHARK_COL[s] + '20' : 'transparent',
+                border: `1px solid ${i === activeSharkIdx ? SHARK_COL[s] : 'var(--border)'}`,
+                fontFamily: 'var(--f-mono)', fontSize: 10,
+                color: i === activeSharkIdx ? SHARK_COL[s] : 'var(--dim)',
+                transition: 'all .3s',
+              }}>
+                {SHARK_INI[s]} {i === activeSharkIdx && '← ACTIVE'}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--dim)' }}>SHARK:</span>
+            <span style={{ fontFamily: 'var(--f-display)', fontSize: 14, letterSpacing: .5, color: sharkColor }}>
+              {SHARK_LABEL[shark]} · {SHARK_MODE[shark]}
             </span>
-          )}
-          {!isBoardroom && (
             <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--dim)', marginLeft: 8 }}>
               {config.difficulty?.toUpperCase()} · {(config.fundingRound || 'SEED').toUpperCase()}
             </span>
-          )}
-        </div>
+          </div>
+        )}
 
+        {/* Patience bar */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--dim)' }}>PATIENCE</span>
           <div style={{ width: 90, height: 4, background: 'var(--surface3)', borderRadius: 2, overflow: 'hidden' }}>
@@ -193,95 +219,23 @@ export default function PitchArena() {
         </div>
       </div>
 
-      {/* Main */}
+      {/* Main content */}
       <div style={{ flex: 1, display: 'flex', overflow: 'hidden', position: 'relative' }}>
 
-        <div style={{ flex: 1, position: 'relative', background: '#060608', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+        {/* Video area */}
+        <div style={{ flex: 1, position: 'relative', background: '#060608', overflow: 'hidden' }}>
           <div className="scanline" />
 
-          {/* ── BOARDROOM: turn-based — one live iframe + static placeholders ── */}
-          {isBoardroom ? (
-            <div style={{
-              flex: 1, display: 'grid',
-              gridTemplateColumns: `repeat(${boardSharks.length}, 1fr)`,
-              gap: 2, padding: 2, position: 'relative', zIndex: 1,
-            }}>
-              {boardSharks.map((s, idx) => {
-                const isActive = idx === activeSharkIdx
-                const url = embedUrl(s, { username: user?.name || 'Founder', userId: user?.email || 'sharklens-user' })
-                return (
-                  <div key={s} style={{
-                    position: 'relative', background: '#0a0c10', borderRadius: 'var(--r)',
-                    overflow: 'hidden',
-                    border: `1px solid ${isActive ? SHARK_COL[s] : SHARK_COL[s] + '20'}`,
-                    transition: 'border-color .5s',
-                  }}>
-                    {/* Only render live iframe for the active shark to avoid overlapping audio */}
-                    {isActive && url ? (
-                      <iframe
-                        key={`live-${s}`}
-                        src={url}
-                        allow="camera *; microphone *; autoplay *; display-capture *; fullscreen *"
-                        style={{ width: '100%', height: '100%', border: 'none' }}
-                        title={`${s}-agent`}
-                      />
-                    ) : (
-                      /* Inactive sharks shown as silent placeholders */
-                      <AgentPlaceholder shark={s} sharkColor={SHARK_COL[s]} small waiting={!isActive} />
-                    )}
-
-                    {/* Name badge */}
-                    <div style={{
-                      position: 'absolute', top: 8, left: 8,
-                      background: 'rgba(10,12,16,0.85)', border: `1px solid ${SHARK_COL[s]}`,
-                      borderRadius: 20, padding: '3px 10px',
-                      fontFamily: 'var(--f-display)', fontSize: 12, letterSpacing: .5,
-                      color: SHARK_COL[s], backdropFilter: 'blur(8px)',
-                      opacity: isActive ? 1 : 0.5,
-                    }}>
-                      {SHARK_LABEL[s]}
-                    </div>
-
-                    {/* Active indicator */}
-                    {isActive && (
-                      <div style={{
-                        position: 'absolute', top: 8, right: 8,
-                        background: 'rgba(229,9,20,0.15)', border: '1px solid var(--cuban)',
-                        borderRadius: 20, padding: '2px 8px',
-                        fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--cuban)',
-                      }}>● LIVE</div>
-                    )}
-
-                    {/* Waiting indicator for inactive sharks */}
-                    {!isActive && (
-                      <div style={{
-                        position: 'absolute', top: 8, right: 8,
-                        background: 'rgba(10,12,16,0.7)', border: '1px solid var(--border)',
-                        borderRadius: 20, padding: '2px 8px',
-                        fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--dim)',
-                      }}>WAITING</div>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
+          {/* TruGen iframe */}
+          {iframeUrl ? (
+            <iframe
+              src={iframeUrl}
+              allow="camera *; microphone *; autoplay *; display-capture *; fullscreen *"
+              style={{ width: '100%', height: '100%', border: 'none', position: 'absolute', inset: 0, zIndex: 1 }}
+              title="TruGen AI Agent"
+            />
           ) : (
-            /* ── SOLO: single shark ── */
-            <div style={{ flex: 1, position: 'relative' }}>
-              {(() => {
-                const url = embedUrl(shark, { username: user?.name || 'Founder', userId: user?.email || 'sharklens-user' })
-                return url ? (
-                  <iframe
-                    src={url}
-                    allow="camera *; microphone *; autoplay *; display-capture *; fullscreen *"
-                    style={{ width: '100%', height: '100%', border: 'none', position: 'absolute', inset: 0, zIndex: 1 }}
-                    title="TruGen AI Agent"
-                  />
-                ) : (
-                  <AgentPlaceholder shark={shark} sharkColor={sharkColor} />
-                )
-              })()}
-            </div>
+            <AgentPlaceholder shark={shark} sharkColor={sharkColor} />
           )}
 
           {/* Permission hint */}
@@ -297,7 +251,7 @@ export default function PitchArena() {
             </div>
           )}
 
-          {/* Deck intelligence banner */}
+          {/* Deck intelligence injected banner */}
           {deckIntelligence && (
             <div style={{
               position: 'absolute', top: 16, right: 16,
@@ -310,23 +264,7 @@ export default function PitchArena() {
             </div>
           )}
 
-          {/* Boardroom turn indicator */}
-          {isBoardroom && (
-            <div style={{
-              position: 'absolute', bottom: 170, left: '50%', transform: 'translateX(-50%)',
-              background: 'rgba(10,12,16,0.88)', border: `1px solid ${sharkColor}`,
-              borderRadius: 'var(--r-lg)', padding: '6px 16px',
-              fontFamily: 'var(--f-mono)', fontSize: 10, color: sharkColor,
-              zIndex: 25, backdropFilter: 'blur(8px)', whiteSpace: 'nowrap',
-              display: 'flex', alignItems: 'center', gap: 8,
-            }}>
-              <span>🎤</span>
-              <span>{SHARK_LABEL[shark]} is speaking</span>
-              <span style={{ opacity: 0.6 }}>· next in {Math.ceil(turnSecsRemaining)}s</span>
-            </div>
-          )}
-
-          {/* ── SINGLE user video PIP ── */}
+          {/* User cam PIP */}
           <div style={{
             position: 'absolute', bottom: 20, right: 20,
             width: 190, height: 140, borderRadius: 'var(--r-lg)',
@@ -347,12 +285,16 @@ export default function PitchArena() {
 
           <NonsensePanel ml={ml} />
 
+          {/* Hint overlay */}
           {hint && (
             <div style={{
-              position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%,-50%)',
+              position: 'absolute', top: '50%', left: '50%',
+              transform: 'translate(-50%,-50%)',
               background: 'rgba(10,12,16,0.96)', border: '1px solid var(--angel)',
-              borderRadius: 'var(--r-xl)', padding: '24px 32px', maxWidth: 420, textAlign: 'center', zIndex: 50,
-              opacity: hintVisible ? 1 : 0, transition: 'opacity .4s', backdropFilter: 'blur(16px)',
+              borderRadius: 'var(--r-xl)', padding: '24px 32px',
+              maxWidth: 420, textAlign: 'center', zIndex: 50,
+              opacity: hintVisible ? 1 : 0, transition: 'opacity .4s',
+              backdropFilter: 'blur(16px)',
             }}>
               <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--angel)', letterSpacing: 2, marginBottom: 12 }}>⏸ AI HINT</div>
               <div style={{ fontSize: 16, lineHeight: 1.6, color: 'var(--text)', fontWeight: 300 }}>{hint}</div>
@@ -366,35 +308,31 @@ export default function PitchArena() {
   )
 }
 
-function AgentPlaceholder({ shark, sharkColor, small, waiting }) {
+function AgentPlaceholder({ shark, sharkColor }) {
   const ini   = SHARK_INI[shark]
   const label = SHARK_LABEL[shark]
-  const size  = small ? 64 : 110
   return (
     <div style={{
       position: 'absolute', inset: 0,
-      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: small ? 8 : 16,
+      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
       background: `radial-gradient(ellipse 50% 50% at 50% 45%, ${sharkColor}08 0%, transparent 70%)`,
     }}>
-      <div style={{ width: size, height: size, borderRadius: '50%', border: `2px solid ${sharkColor}${waiting ? '30' : '40'}`, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-        {!waiting && (
-          <div style={{ position: 'absolute', inset: -10, borderRadius: '50%', border: `1px solid ${sharkColor}20`, animation: 'pulse 2.5s infinite' }} />
-        )}
-        <div style={{ fontFamily: 'var(--f-display)', fontSize: small ? 18 : 36, color: sharkColor, opacity: waiting ? 0.4 : 1 }}>{ini}</div>
+      <div style={{ width: 110, height: 110, borderRadius: '50%', border: `2px solid ${sharkColor}40`, display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+        <div style={{ position: 'absolute', inset: -10, borderRadius: '50%', border: `1px solid ${sharkColor}20`, animation: 'pulse 2.5s infinite' }} />
+        <div style={{ fontFamily: 'var(--f-display)', fontSize: 36, color: sharkColor }}>{ini}</div>
       </div>
-      {!small && (
-        <div>
-          <div style={{ fontFamily: 'var(--f-display)', fontSize: 18, letterSpacing: 1, textAlign: 'center', color: 'var(--text)' }}>{label}</div>
-          <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: waiting ? 'var(--dim)' : 'var(--vc)', textAlign: 'center', marginTop: 4, letterSpacing: 2 }}>
-            {waiting ? 'WAITING TURN' : 'LISTENING'}
-          </div>
-        </div>
-      )}
-      {!small && !waiting && (
-        <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--dim)', border: '1px solid var(--border)', padding: '4px 12px', borderRadius: 20, textAlign: 'center', maxWidth: 240 }}>
-          Add VITE_TRUGEN_AGENT_{shark.toUpperCase()} in .env with a unique avatar
-        </div>
-      )}
+      <div>
+        <div style={{ fontFamily: 'var(--f-display)', fontSize: 18, letterSpacing: 1, textAlign: 'center', color: 'var(--text)' }}>{label}</div>
+        <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--vc)', textAlign: 'center', marginTop: 4, letterSpacing: 2 }}>LISTENING</div>
+      </div>
+      <div style={{ display: 'flex', gap: 3, alignItems: 'flex-end', height: 24 }}>
+        {[.3, .7, 1, .6, .4].map((h, i) => (
+          <div key={i} style={{ width: 3, height: `${h * 100}%`, background: sharkColor, borderRadius: 2, opacity: .7, animation: `waveBar 1.4s ease ${i * .12}s infinite` }} />
+        ))}
+      </div>
+      <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--dim)', border: '1px solid var(--border)', padding: '4px 12px', borderRadius: 20 }}>
+        ADD AGENT IDs IN .env TO ACTIVATE TRUGEN
+      </div>
     </div>
   )
 }
