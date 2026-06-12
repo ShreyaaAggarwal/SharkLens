@@ -1,201 +1,605 @@
-# 🦈 SharkLens — AI Shark Tank Pitch Coach
-**Team: Array to Heaven | TruGen AI · PS4.1**
+<div align="center">
 
-> Real-time AI video pitch coach. Practice against brutal investor personas with live ML telemetry, confidence fusion, and automated MCP actions.
+# 🦈 SharkLens
+### *Face the Sharks Before You Face the Real Ones.*
 
----
+<p align="center">
+  An AI-powered Investor Simulation & Pitch Intelligence Platform that helps founders practice, analyze, optimize, and perfect startup pitches through real-time investor conversations, behavioral analytics, and AI-driven feedback.
+</p>
 
-## 📁 File Structure
+<br/>
 
-```
-sharklens/
-│
-├── public/index.html              HTML shell
-├── package.json                   Frontend deps (React 18 + Vite)
-├── vite.config.js                 Vite config
-├── vercel.json                    SPA routing fix for Vercel
-├── .env.example                   Copy → .env
-│
-├── src/
-│   ├── main.jsx                   React entry point
-│   ├── App.jsx                    Router + auth guard
-│   │
-│   ├── context/
-│   │   └── AppContext.jsx         Global state (user, config, session data)
-│   │
-│   ├── styles/
-│   │   └── globals.css            Design system: tokens, animations, base styles
-│   │
-│   ├── utils/
-│   │   ├── trugen.js              TruGen API client + shark system prompts
-│   │   └── mlEngine.js            Confidence fusion, gaze, filler detection
-│   │
-│   ├── components/
-│   │   ├── Nav.jsx                Navigation bar with step tracker
-│   │   ├── RadarChart.jsx         Canvas 5-axis radar chart
-│   │   ├── ScoreRing.jsx          Animated circular score ring
-│   │   ├── Sparkline.jsx          Mini inline line chart
-│   │   └── MLSidebar.jsx          Live ML telemetry sidebar (Arena)
-│   │
-│   └── pages/
-│       ├── Login.jsx              Cinematic login/signup with parallax
-│       ├── CommandCenter.jsx      Step 1: Shark selector, difficulty, API config
-│       ├── DeckPortal.jsx         Step 2: Drag-drop deck upload + Drive MCP
-│       ├── PitchArena.jsx         Step 3+4: TruGen iFrame + live ML sidebar
-│       ├── Scorecard.jsx          Step 5: Score ring, bars, timeline, leaderboard
-│       └── Optimizer.jsx          Step 6: AI rewrite, full script, MCP automation
-│
-└── backend/
-    ├── server.js                  Express server (port 3001)
-    ├── package.json               Backend deps
-    ├── .env.example               Backend env vars
-    └── routes/
-        ├── trugen.js              TruGen API proxy (protects key server-side)
-        ├── webhooks.js            TruGen callback handler (session events)
-        └── mcp.js                 Gmail · Calendar · Drive · Search MCP stubs
-```
+![React](https://img.shields.io/badge/React-18-blue?style=for-the-badge&logo=react)
+![Vite](https://img.shields.io/badge/Vite-Frontend-purple?style=for-the-badge&logo=vite)
+![Express](https://img.shields.io/badge/Express-Backend-black?style=for-the-badge&logo=express)
+![AI Powered](https://img.shields.io/badge/AI-Powered-red?style=for-the-badge)
+![Hackathon](https://img.shields.io/badge/Hackathon-Ready-success?style=for-the-badge)
+![Shark Tank](https://img.shields.io/badge/Shark_Tank-Simulator-orange?style=for-the-badge)
+
+</div>
 
 ---
 
-## 🚀 Quick Start
+# The Problem
 
-### Step 1 — Clone & Install
+Every founder prepares for investor meetings by practicing in front of:
+
+- Mirrors
+- Friends
+- Co-founders
+- Generic AI chatbots
+
+Yet the actual investor meeting feels completely different.
+
+Investors interrupt.
+
+They challenge assumptions.
+
+They question market size.
+
+They attack weak financials.
+
+They notice hesitation.
+
+They detect lack of conviction.
+
+And most importantly:
+
+**Nobody tells founders how they actually performed while speaking.**
+
+Traditional pitch practice tools focus only on content.
+
+They do not measure:
+
+- Confidence
+- Eye contact
+- Delivery quality
+- Filler words
+- Emotional state
+- Real-time investor pressure
+
+As a result, founders walk into high-stakes meetings with no objective understanding of how they perform under pressure.
+
+---
+
+# Why SharkLens?
+
+SharkLens was built around a simple idea:
+
+> Founders shouldn't discover weaknesses during investor meetings. They should discover them before.
+
+Instead of reading pitch decks or generating static feedback, SharkLens creates a realistic investor simulation environment where founders interact with AI investors while an intelligence layer continuously analyzes their communication.
+
+The result is not just pitch practice.
+
+It is investor readiness training.
+
+---
+
+# 🚀 Overview
+
+SharkLens is an AI-powered startup pitch coaching platform that combines:
+
+- AI Investor Simulations
+- Real-Time Behavioral Analytics
+- Multi-Investor Boardroom Mode
+- Confidence Intelligence
+- Pitch Optimization
+- Automated Post-Pitch Workflows
+
+The platform enables founders to practice against different investor personalities while receiving live performance insights normally available only through expensive coaching sessions.
+
+---
+
+# ✨ Core Features
+
+## 🎙 AI Investor Simulation
+
+Practice against multiple AI investors with distinct personalities and questioning styles.
+
+Current investor personas include:
+
+| Investor | Style |
+|-----------|--------|
+| Mark Cuban | Aggressive, numbers-focused |
+| Priya Sharma | Vision and growth oriented |
+| Sunita Agarwal | Practical and execution-driven |
+| Nikhil Kamath | Strategic and philosophical |
+| Anupam Mittal | Brand and consumer focused |
+| Aman Gupta | D2C and growth focused |
+
+Each investor behaves differently, forcing founders to adapt in real time.
+
+---
+
+## 🏛 Boardroom Mode
+
+Instead of talking to a single AI avatar, founders can create an investor panel and simulate a real boardroom environment.
+
+Features:
+
+- Multiple investors on screen
+- Active speaker rotation
+- Investor-specific questioning
+- Realistic pressure environment
+- Multi-perspective feedback
+
+This transforms practice sessions into realistic fundraising simulations.
+
+---
+
+## 📊 Real-Time Confidence Engine
+
+SharkLens continuously calculates a confidence score during the pitch.
+
+The confidence engine combines multiple signals:
+
+- Speech quality
+- Delivery consistency
+- Speaking pace
+- Behavioral indicators
+- Communication effectiveness
+
+Result:
+
+A live confidence score that updates throughout the session.
+
+---
+
+## 👁 Eye Contact Tracking
+
+Investor trust is heavily influenced by visual engagement.
+
+SharkLens monitors:
+
+- Eye contact percentage
+- Attention consistency
+- Focus stability
+
+Founders immediately see whether they are maintaining strong engagement throughout the pitch.
+
+---
+
+## 💬 Filler Word Detection
+
+The platform identifies communication patterns that weaken investor confidence.
+
+Examples:
+
+- Umm
+- Like
+- Basically
+- Actually
+- You know
+- So
+
+Instead of generic feedback, founders receive quantified filler-word analytics.
+
+---
+
+## 😊 Emotion Intelligence
+
+SharkLens evaluates emotional delivery and speaking presence.
+
+Detected states include:
+
+- Confidence
+- Nervousness
+- Neutrality
+- Energy level
+
+This helps founders understand how investors may perceive them during the pitch.
+
+---
+
+## 📈 Performance Radar
+
+Every session generates a multi-dimensional performance breakdown.
+
+Metrics include:
+
+- Confidence
+- Communication
+- Delivery
+- Investor Readiness
+- Clarity
+- Engagement
+
+The radar visualization provides an instant understanding of strengths and weaknesses.
+
+---
+
+## 🧠 AI Pitch Optimizer
+
+After the session ends, SharkLens generates actionable improvement insights.
+
+The optimizer:
+
+- Identifies weak sections
+- Highlights delivery issues
+- Suggests improvements
+- Recommends practice areas
+
+This transforms feedback into a structured improvement plan.
+
+---
+
+## ⚡ AI Hint System
+
+Founders can request contextual coaching during practice sessions.
+
+Examples:
+
+- Improve financial explanation
+- Clarify business model
+- Strengthen market positioning
+- Handle investor objections
+
+The result is a guided learning experience rather than passive evaluation.
+
+---
+
+## 📂 Deck Intelligence
+
+Users can upload startup decks before pitching.
+
+SharkLens extracts:
+
+- Startup information
+- Product details
+- Market context
+- Business model insights
+
+This allows investors and analytics systems to provide more relevant feedback.
+
+---
+
+## 🔄 MCP Automation Pipeline
+
+SharkLens extends beyond coaching.
+
+Post-session workflows can automatically trigger actions such as:
+
+- Report generation
+- Session scheduling
+- Knowledge storage
+- Search augmentation
+
+This turns SharkLens into an intelligent founder workflow assistant.
+
+---
+
+# 🏗 System Architecture
+
+```text
+                 ┌─────────────────────┐
+                 │     Founder         │
+                 └──────────┬──────────┘
+                            │
+                            ▼
+                 ┌─────────────────────┐
+                 │    SharkLens UI     │
+                 │ React + Vite        │
+                 └──────────┬──────────┘
+                            │
+          ┌─────────────────┼─────────────────┐
+          ▼                 ▼                 ▼
+
+ ┌──────────────┐  ┌────────────────┐  ┌─────────────────┐
+ │ TruGen AI    │  │ ML Analytics   │  │ MCP Services    │
+ │ Investors    │  │ Engine         │  │ Automation      │
+ └──────────────┘  └────────────────┘  └─────────────────┘
+
+          ▼                 ▼                 ▼
+
+      Investor       Performance Data     Actions
+
+                            ▼
+
+                 ┌─────────────────────┐
+                 │ Optimization Layer  │
+                 └─────────────────────┘
+```
+
+---
+
+# 🧠 AI Workflow
+
+```text
+Pitch Deck Upload
+        │
+        ▼
+Deck Intelligence
+        │
+        ▼
+AI Investor Session
+        │
+        ▼
+Real-Time Analytics
+        │
+        ├── Confidence
+        ├── Eye Contact
+        ├── Emotion
+        ├── Filler Words
+        ├── Speech Rate
+        └── Session Metrics
+        │
+        ▼
+Scorecard Generation
+        │
+        ▼
+AI Optimization
+        │
+        ▼
+Actionable Founder Insights
+```
+
+---
+
+# 💻 Tech Stack
+
+## Frontend
+
+| Technology | Purpose |
+|------------|----------|
+| React 18 | User Interface |
+| Vite | Build Tool |
+| React Router | Navigation |
+| Canvas APIs | Radar Visualizations |
+| CSS Variables | Design System |
+
+---
+
+## Backend
+
+| Technology | Purpose |
+|------------|----------|
+| Node.js | Runtime |
+| Express.js | API Layer |
+| REST APIs | Communication |
+
+---
+
+## AI & Intelligence
+
+| Component | Purpose |
+|------------|----------|
+| TruGen AI | Investor Agents |
+| Confidence Fusion Engine | Confidence Scoring |
+| Emotion Analysis | Behavioral Signals |
+| Eye Contact Analysis | Engagement Metrics |
+| Filler Detection | Speech Quality Analysis |
+
+---
+
+# 📁 Project Structure
+
+```text
+frontend/
+│
+├── pages/
+│   ├── Login
+│   ├── CommandCenter
+│   ├── DeckPortal
+│   ├── PitchArena
+│   ├── Scorecard
+│   └── Optimizer
+│
+├── components/
+│   ├── MLSidebar
+│   ├── RadarChart
+│   ├── ScoreRing
+│   └── Sparkline
+│
+├── services/
+│   ├── trugen
+│   └── mlEngine
+│
+└── context/
+    └── AppContext
+
+backend/
+│
+├── routes/
+│   ├── trugen
+│   ├── webhooks
+│   └── mcp
+│
+└── server.js
+```
+
+---
+
+# ⚙️ Installation
+
+### Clone Repository
 
 ```bash
-# Frontend
+git clone https://github.com/yourusername/sharklens.git
 cd sharklens
-npm install
+```
 
-# Backend
+### Install Frontend
+
+```bash
+npm install
+```
+
+### Install Backend
+
+```bash
 cd backend
 npm install
 ```
 
-### Step 2 — Environment Variables
+### Start Backend
 
 ```bash
-# Root (frontend)
-cp .env.example .env
-# Fill: VITE_TRUGEN_API_KEY, VITE_TRUGEN_AGENT_ID
-
-# Backend
-cp backend/.env.example backend/.env
-# Fill: TRUGEN_API_KEY
+npm run dev
 ```
 
-### Step 3 — Get your TruGen Agent ID
-
-1. Go to https://app.trugen.ai
-2. Create a new Agent
-3. Copy the Agent ID (starts with `agt_...`)
-4. Paste into `VITE_TRUGEN_AGENT_ID` in `.env`
-5. Also paste into the API Config field on the Setup screen
-
-### Step 4 — Run
+### Start Frontend
 
 ```bash
-# Terminal 1: Backend
-cd backend && npm run dev    # runs on :3001
-
-# Terminal 2: Frontend
-npm run dev                  # runs on :5173
-```
-
-Open: http://localhost:5173
-
----
-
-## ☁️ Deploy to Vercel
-
-### Frontend (Static)
-```bash
-# In /sharklens root
-vercel deploy
-
-# Set environment variables in Vercel dashboard:
-# VITE_TRUGEN_API_KEY = your_key
-# VITE_TRUGEN_AGENT_ID = your_agent_id
-```
-
-### Backend (Serverless or separate service)
-```bash
-# Option A: Deploy backend to Railway / Render
-# Option B: Convert routes to Vercel API functions in /api folder
-
-# For Vercel API routes, move backend/routes/*.js → sharklens/api/*.js
-# vercel.json already handles SPA routing
+npm run dev
 ```
 
 ---
 
-## 🔑 Environment Variables
+# 🔐 Environment Variables
 
-| Variable | Where | Description |
-|---|---|---|
-| `VITE_TRUGEN_API_KEY` | Frontend `.env` | TruGen API key |
-| `VITE_TRUGEN_AGENT_ID` | Frontend `.env` | Your TruGen Agent ID |
-| `TRUGEN_API_KEY` | Backend `.env` | Same key, server-side |
-| `PORT` | Backend `.env` | Backend port (default 3001) |
-| `FRONTEND_URL` | Backend `.env` | CORS origin |
+### Frontend
 
----
-
-## 🧠 ML Pipeline
-
-| Model | Signal | Implementation |
-|---|---|---|
-| Wav2Vec2 | Filler word detection | Simulated in `mlEngine.js` |
-| MediaPipe Iris | Gaze / eye contact % | Simulated in `mlEngine.js` |
-| MobileViT | Facial emotion classification | Simulated in `mlEngine.js` |
-| Silero VAD | Voice activity detection | Simulated in `mlEngine.js` |
-| Fusion Net | Confidence score (weighted avg) | `fuseConfidence()` in `mlEngine.js` |
-
-**Production upgrade path:** Replace `tickML()` simulation with real WebSocket messages from a Python edge server running actual Wav2Vec2 + MediaPipe inference.
-
----
-
-## 🤝 TruGen Integration
-
-### iFrame Embed (used in Arena)
-```html
-<iframe
-  src="https://app.trugen.ai/embed?agentId=YOUR_AGENT_ID"
-  allow="camera; microphone; autoplay; display-capture"
-/>
+```env
+VITE_TRUGEN_API_KEY=
+VITE_TRUGEN_AGENT_CUBAN=
+VITE_TRUGEN_AGENT_VC=
+VITE_TRUGEN_AGENT_ANGEL=
+VITE_TRUGEN_AGENT_NIKHIL=
+VITE_TRUGEN_AGENT_ANUPAM=
+VITE_TRUGEN_AGENT_AMAN=
 ```
 
-### Webhook Events Handled
-| Event | Action |
-|---|---|
-| `utterance_committed` | Store transcript, trigger ML |
-| `call_ended` | Finalise session, compute score |
-| `agent.started_speaking` | Update UI state |
-| `max_call_duration_timeout` | Auto-end session |
+### Backend
+
+```env
+TRUGEN_API_KEY=
+PORT=3001
+FRONTEND_URL=
+```
 
 ---
 
-## 📊 MCP Integrations
+# 🔌 Integrations
 
-| MCP | Route | Action |
-|---|---|---|
-| Web Search | `POST /api/mcp/search` | Live competitor lookup mid-pitch |
-| Gmail | `POST /api/mcp/gmail` | Auto-send scorecard post-session |
-| Google Calendar | `POST /api/mcp/calendar` | Book follow-up on weak areas |
-| Google Drive | `POST /api/mcp/drive` | Save logs + deck |
+| Integration | Purpose |
+|-------------|----------|
+| TruGen AI | Investor Conversations |
+| Web Search MCP | Context Enrichment |
+| Calendar MCP | Session Scheduling |
+| Drive MCP | Storage Automation |
+| Email MCP | Report Delivery |
 
 ---
 
-## 🎨 Design System
+# ⚡ Performance Optimizations
 
-| Token | Value | Usage |
-|---|---|---|
-| `--bg` | `#0F1115` | Primary background |
-| `--surface` | `#1A1D24` | Cards, containers |
-| `--cuban` | `#E05252` | Mark Cuban / danger / primary CTA |
-| `--vc` | `#3FB97E` | Soft VC / success / positive |
-| `--angel` | `#D99E32` | Indian Angel / warning |
-| `--text` | `#F5F6F8` | Primary text |
-| `--sub` | `#8B949E` | Secondary text |
-| Font Display | Bebas Neue | Headlines |
-| Font Body | Barlow | Body copy |
-| Font Mono | IBM Plex Mono | Data, labels, code |
+- Lightweight Vite architecture
+- Modular component design
+- Context-based state management
+- Reusable analytics engine
+- Efficient rendering strategy
+- Lazy computation of session metrics
+- Responsive boardroom layouts
+- Optimized AI session handling
+
+---
+
+# 🏆 What Makes SharkLens Different?
+
+Most pitch tools answer:
+
+> "What should I say?"
+
+SharkLens answers:
+
+> "How did you actually perform?"
+
+The platform evaluates both:
+
+### Content Intelligence
+- Pitch quality
+- Narrative structure
+- Business clarity
+
+### Human Intelligence
+- Confidence
+- Eye contact
+- Speaking habits
+- Emotional delivery
+
+This combination creates a far more realistic representation of investor readiness.
+
+---
+
+# 🚧 Challenges We Solved
+
+### Real-Time Analytics
+
+Combining multiple behavioral signals into a meaningful confidence score.
+
+### Investor Simulation
+
+Creating distinct investor personalities rather than generic chatbot responses.
+
+### Multi-Investor Boardroom
+
+Supporting realistic investor panel interactions.
+
+### Actionable Feedback
+
+Transforming raw metrics into useful founder guidance.
+
+### Engagement Tracking
+
+Measuring communication effectiveness beyond simple speech recognition.
+
+---
+
+# 📈 Scalability Considerations
+
+SharkLens has been designed with future expansion in mind.
+
+Potential scaling paths:
+
+- Real-time inference servers
+- Live WebSocket analytics
+- Team pitch sessions
+- Investor matchmaking
+- Founder benchmarking
+- Organization dashboards
+- Enterprise startup accelerators
+- University incubation programs
+
+---
+
+# 🌍 Built For The Future
+
+Future roadmap includes:
+
+- Real AI eye-tracking inference
+- Advanced emotion recognition
+- Investor-specific scorecards
+- Team collaboration mode
+- Historical performance trends
+- AI-generated pitch decks
+- Startup readiness benchmarking
+- Accelerator integrations
+
+---
+
+# 🎤 Hackathon Pitch
+
+**SharkLens is an AI-powered investor simulation platform that helps founders practice fundraising conversations before they happen.**
+
+Instead of receiving static feedback, founders interact with AI investors while SharkLens continuously analyzes confidence, eye contact, emotion, speech quality, and delivery performance in real time.
+
+The platform combines investor simulation, behavioral analytics, pitch optimization, and workflow automation into a single experience, helping founders become truly investor-ready before entering the boardroom.
+
+---
+
+# 👩‍💻 Built By
+
+**Array to Heaven**
+
+Built with the belief that every founder deserves access to world-class pitch coaching—without requiring access to world-class investors.
+
+---
+
+<div align="center">
+
+### 🦈 Practice. Analyze. Improve. Fundraise.
+
+**SharkLens — Face the Sharks Before You Face the Real Ones.**
+
+</div>
