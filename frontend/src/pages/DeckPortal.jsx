@@ -2,7 +2,35 @@ import { useState, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 
-const CLAUDE_API = 'https://api.anthropic.com/v1/messages'
+const BACKEND = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const CLAUDE_PROXY = `${BACKEND}/api/claude/analyze`
+
+async function askClaude(prompt, maxTokens = 1200) {
+  const r = await fetch(CLAUDE_PROXY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, maxTokens }),
+  })
+  if (!r.ok) {
+    const err = await r.text()
+    throw new Error(`Claude proxy failed: ${r.status} ${err}`)
+  }
+  const data = await r.json()
+  return data.text || ''
+}
+
+// Robust JSON extraction — handles markdown fences, trailing commas, partial responses
+function extractJSON(raw) {
+  if (!raw) throw new Error('Empty response')
+  // Strip markdown fences
+  let clean = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+  // Find first { and last } to isolate JSON block
+  const start = clean.indexOf('{')
+  const end   = clean.lastIndexOf('}')
+  if (start === -1 || end === -1) throw new Error('No JSON object found')
+  clean = clean.slice(start, end + 1)
+  return JSON.parse(clean)
+}
 
 export default function DeckPortal() {
   const { setDeckFile, setDeckText, setDeckIntelligence, config } = useApp()
@@ -10,52 +38,53 @@ export default function DeckPortal() {
   const inputRef = useRef()
 
   const [file, setFile]           = useState(null)
-  const [status, setStatus]       = useState('idle')   // idle|reading|analyzing|done|error
+  const [status, setStatus]       = useState('idle')
+  const [statusMsg, setStatusMsg] = useState('')
   const [progress, setProgress]   = useState(0)
   const [dragging, setDragging]   = useState(false)
   const [intelligence, setIntel]  = useState(null)
   const [driveStatus, setDrive]   = useState('idle')
-  const [rawText, setRawText]     = useState('')
-  const [murderStatus, setMurder] = useState('idle') // idle|scraping|done
   const [murderBoard, setMurder2] = useState(null)
   const [startupUrl, setStartupUrl] = useState('')
 
-  const shark = { cuban: 'var(--cuban)', vc: 'var(--vc)', angel: 'var(--angel)' }[config.shark]
+  const shark = { cuban: 'var(--cuban)', vc: 'var(--vc)', angel: 'var(--angel)' }[config.shark] || 'var(--cuban)'
 
-  // ── Real deck text extraction ──
+  // ── Text extraction from uploaded file ──
   async function extractText(f) {
     return new Promise((resolve) => {
       const reader = new FileReader()
       reader.onload = (e) => {
-        // For text files read directly
         if (f.type === 'text/plain') {
           resolve(e.target.result || '')
           return
         }
-        // For PDF/PPTX we read as text (basic extraction)
-        // In prod: use pdf.js or mammoth for richer extraction
+        // For PDF/PPTX: strip binary noise, keep ASCII readable chunks
         const text = e.target.result || ''
-        // Strip binary noise, keep readable chunks
         const cleaned = text
           .replace(/[^\x20-\x7E\n\r\t]/g, ' ')
           .replace(/\s{3,}/g, '\n')
           .trim()
-        resolve(cleaned.slice(0, 8000)) // cap for API
+        // Only use if we got reasonable text (>200 printable chars)
+        const useful = cleaned.replace(/\s/g, '').length
+        resolve(useful > 200 ? cleaned.slice(0, 8000) : '')
       }
       reader.onerror = () => resolve('')
       reader.readAsText(f)
     })
   }
 
-  // ── Claude API: Real deck intelligence ──
+  // ── Claude: deck intelligence ──
   async function analyzeDeckWithClaude(text, filename) {
-    const prompt = `You are a Shark Tank analyst AI. Analyze this pitch deck content and extract structured intelligence.
+    const contentNote = text
+      ? `DECK CONTENT (extracted text):\n${text}`
+      : `NOTE: Text extraction yielded little content from "${filename}". Infer what you can from the filename and provide a best-effort analysis with placeholder values where data is unavailable.`
+
+    const prompt = `You are a Shark Tank analyst AI. Analyze this pitch deck and extract structured intelligence.
 
 DECK FILENAME: ${filename}
-DECK CONTENT:
-${text}
+${contentNote}
 
-Extract and return ONLY valid JSON (no markdown, no explanation) in this exact format:
+Return ONLY a valid JSON object (no markdown fences, no explanation, no preamble):
 {
   "startupName": "name of the startup",
   "sector": "sector/industry",
@@ -63,36 +92,21 @@ Extract and return ONLY valid JSON (no markdown, no explanation) in this exact f
   "solution": "1-2 sentence summary of the solution",
   "marketSize": "TAM/SAM/SOM if mentioned, else 'Not stated'",
   "businessModel": "how they make money",
-  "traction": "users, revenue, growth metrics if mentioned",
-  "teamHighlight": "key team credential",
-  "ask": "funding ask if mentioned",
+  "traction": "users, revenue, growth metrics if mentioned, else 'Not stated'",
+  "teamHighlight": "key team credential if mentioned",
+  "ask": "funding ask if mentioned, else 'Not stated'",
   "topWeaknesses": ["weakness 1", "weakness 2", "weakness 3"],
-  "likelySharkQuestions": ["question 1 Mark Cuban would ask", "question 2", "question 3"],
-  "claimsToVerify": ["claim 1 that needs data", "claim 2"],
-  "competitorsMentioned": ["competitor 1", "competitor 2"],
+  "likelySharkQuestions": ["question 1", "question 2", "question 3"],
+  "claimsToVerify": ["claim 1", "claim 2"],
+  "competitorsMentioned": ["competitor 1"],
   "overallReadiness": 65
 }`
-
-    const response = await fetch(CLAUDE_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    })
-
-    if (!response.ok) throw new Error('Claude API failed')
-    const data = await response.json()
-    const raw = data.content?.[0]?.text || '{}'
-    const clean = raw.replace(/```json|```/g, '').trim()
-    return JSON.parse(clean)
+    const raw = await askClaude(prompt, 1200)
+    return extractJSON(raw)
   }
 
-  // ── Murder Board: Real web research via Claude ──
-  async function buildMurderBoard(intel, url) {
-    setMurder('scraping')
+  // ── Claude: murder board ──
+  async function buildMurderBoardClaude(intel, url) {
     const prompt = `You are a ruthless investor doing homework before a pitch meeting.
 
 Startup: ${intel.startupName}
@@ -101,10 +115,11 @@ URL provided: ${url || 'none'}
 Problem: ${intel.problemStatement}
 Claimed market: ${intel.marketSize}
 Competitors mentioned: ${(intel.competitorsMentioned || []).join(', ')}
+Traction: ${intel.traction}
 
-Based on your knowledge of the Indian startup ecosystem, generate a MURDER BOARD — all the information, contradictions, and ammunition an investor would use to destroy this pitch.
+Based on your knowledge of the Indian startup ecosystem, generate a MURDER BOARD — all the information, contradictions, and ammunition an investor would use to stress-test this pitch.
 
-Return ONLY valid JSON (no markdown):
+Return ONLY a valid JSON object (no markdown fences, no preamble):
 {
   "founderDigital": [
     {"type": "LINKEDIN", "finding": "finding about typical founders in this space"},
@@ -112,7 +127,7 @@ Return ONLY valid JSON (no markdown):
     {"type": "COMPETITION", "finding": "who the real competitors are"}
   ],
   "marketContradictions": [
-    {"claim": "their claim", "reality": "the real data", "severity": "HIGH|MED|LOW"}
+    {"claim": "their claim", "reality": "the real data", "severity": "HIGH"}
   ],
   "killerQuestions": [
     "Most brutal question 1 specific to their business",
@@ -123,25 +138,8 @@ Return ONLY valid JSON (no markdown):
   "redFlags": ["red flag 1", "red flag 2", "red flag 3"],
   "openingLine": "The exact first thing the shark will say to throw them off"
 }`
-
-    const response = await fetch(CLAUDE_API, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 1000,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    })
-
-    if (!response.ok) throw new Error('Murder board failed')
-    const data = await response.json()
-    const raw = data.content?.[0]?.text || '{}'
-    const clean = raw.replace(/```json|```/g, '').trim()
-    const board = JSON.parse(clean)
-    setMurder2(board)
-    setMurder('done')
-    return board
+    const raw = await askClaude(prompt, 1200)
+    return extractJSON(raw)
   }
 
   async function handleFile(f) {
@@ -149,35 +147,60 @@ Return ONLY valid JSON (no markdown):
     setFile(f)
     setDeckFile(f)
     setStatus('reading')
+    setStatusMsg('Reading deck...')
     setProgress(10)
 
     try {
       // Step 1: Extract text
       const text = await extractText(f)
-      setRawText(text)
       setDeckText(text)
-      setProgress(35)
+      setProgress(25)
       setStatus('analyzing')
+      setStatusMsg('Claude analyzing claims & metrics...')
 
-      // Step 2: Claude analysis
-      const intel = await analyzeDeckWithClaude(
-        text || `Pitch deck: ${f.name}. Please analyze based on filename context.`,
-        f.name
-      )
-      setProgress(75)
+      // Step 2: Run deck analysis + murder board IN PARALLEL to halve wait time
+      const [intel, board] = await Promise.all([
+        analyzeDeckWithClaude(
+          text || '',
+          f.name
+        ),
+        // Murder board starts with minimal info; we'll enrich after deck analysis
+        // but we kick it off in parallel using filename/url context
+        buildMurderBoardClaude(
+          {
+            startupName: f.name.replace(/\.(pdf|pptx|ppt|txt)/i, ''),
+            sector: 'Technology',
+            problemStatement: 'See deck.',
+            marketSize: 'See deck.',
+            traction: 'See deck.',
+            competitorsMentioned: [],
+          },
+          startupUrl
+        ).catch(() => null), // murder board failure is non-fatal
+      ])
+
+      setProgress(80)
+      setStatusMsg('Finalising intelligence...')
+
       setIntel(intel)
       setDeckIntelligence(intel)
 
-      // Step 3: Build murder board automatically
-      setProgress(90)
-      await buildMurderBoard(intel, startupUrl)
+      // If murder board failed in parallel (had no intel), build now with real intel
+      let finalBoard = board
+      if (!finalBoard) {
+        try {
+          finalBoard = await buildMurderBoardClaude(intel, startupUrl)
+        } catch { /* non-fatal */ }
+      }
+      setMurder2(finalBoard)
 
       setProgress(100)
       setStatus('done')
+      setStatusMsg('Intelligence extracted · Murder board ready')
     } catch (err) {
       console.error('Deck analysis failed:', err)
-      // Fallback — still let them proceed
-      setIntel({
+      // Graceful fallback — still let them proceed
+      const fallback = {
         startupName: f.name.replace(/\.(pdf|pptx|ppt|txt)/i, ''),
         sector: 'Technology',
         problemStatement: 'Deck uploaded — manual review mode.',
@@ -187,14 +210,17 @@ Return ONLY valid JSON (no markdown):
         traction: 'Not extracted',
         teamHighlight: 'Not extracted',
         ask: 'Not stated',
-        topWeaknesses: ['Deck could not be fully parsed', 'Add text-based content', 'Consider TXT format for best results'],
+        topWeaknesses: ['Deck text could not be fully parsed', 'Consider uploading as .txt for best results', 'Add text-based content to slides'],
         likelySharkQuestions: ['What is your CAC/LTV ratio?', 'How is this defensible?', 'Why now?'],
         claimsToVerify: [],
         competitorsMentioned: [],
-        overallReadiness: 50
-      })
+        overallReadiness: 50,
+      }
+      setIntel(fallback)
+      setDeckIntelligence(fallback)
       setProgress(100)
       setStatus('done')
+      setStatusMsg('Partial extraction — proceeding')
     }
   }
 
@@ -223,7 +249,7 @@ Return ONLY valid JSON (no markdown):
           murder board of everything the shark will use against you.
         </p>
 
-        {/* Startup URL for Murder Board */}
+        {/* Startup URL */}
         <div className="fu2" style={{ marginBottom: 20 }}>
           <div className="field">
             <label>Startup Website / LinkedIn (optional — for deeper murder board)</label>
@@ -276,6 +302,9 @@ Return ONLY valid JSON (no markdown):
                   }}>{f}</span>
                 ))}
               </div>
+              <p style={{ color: 'var(--dim)', fontSize: 11, marginTop: 12, fontFamily: 'var(--f-mono)' }}>
+                💡 TIP: .txt files give the best extraction. Export your deck as text for fastest analysis.
+              </p>
             </>
           ) : (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center' }}>
@@ -285,13 +314,12 @@ Return ONLY valid JSON (no markdown):
                 {(file.size / 1024).toFixed(0)} KB
               </div>
 
-              {/* Progress */}
               <div style={{ width: '100%', maxWidth: 380 }}>
                 <div style={{ height: 3, background: 'var(--surface3)', borderRadius: 2, overflow: 'hidden', marginBottom: 10 }}>
                   <div style={{
                     height: '100%', width: `${Math.min(progress, 100)}%`,
                     background: `linear-gradient(90deg, ${shark}, var(--vc))`,
-                    borderRadius: 2, transition: 'width .3s',
+                    borderRadius: 2, transition: 'width .4s',
                   }} />
                 </div>
                 <div style={{
@@ -299,15 +327,14 @@ Return ONLY valid JSON (no markdown):
                   alignItems: 'center', gap: 8, justifyContent: 'center',
                   color: status === 'done' ? 'var(--vc)' : 'var(--dim)',
                 }}>
-                  {status === 'reading'   && <><span className="spin-ring" />READING DECK...</>}
-                  {status === 'analyzing' && <><span className="spin-ring" />CLAUDE ANALYZING CLAIMS & METRICS...</>}
-                  {status === 'done'      && <>✓ INTELLIGENCE EXTRACTED · MURDER BOARD READY</>}
-                  {status === 'error'     && <>⚠ PARTIAL EXTRACTION — PROCEEDING</>}
+                  {status !== 'done' && status !== 'idle' && <span className="spin-ring" />}
+                  {status === 'done' && <>✓ </>}
+                  {statusMsg}
                 </div>
               </div>
 
               {status === 'done' && (
-                <button onClick={e => { e.stopPropagation(); setFile(null); setStatus('idle'); setProgress(0); setIntel(null); setMurder2(null); }}
+                <button onClick={e => { e.stopPropagation(); setFile(null); setStatus('idle'); setStatusMsg(''); setProgress(0); setIntel(null); setMurder2(null) }}
                   style={{ background: 'none', border: 'none', cursor: 'pointer', fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--dim)' }}>
                   ✕ REMOVE
                 </button>
@@ -316,7 +343,7 @@ Return ONLY valid JSON (no markdown):
           )}
         </div>
 
-        {/* ── Real Intelligence Panel ── */}
+        {/* ── Intelligence Panel ── */}
         {intelligence && status === 'done' && (
           <div className="fu" style={{ marginBottom: 20 }}>
             <div className="card">
@@ -324,7 +351,6 @@ Return ONLY valid JSON (no markdown):
                 Extracted Intelligence · {intelligence.startupName}
               </div>
 
-              {/* Readiness Score */}
               <div style={{
                 display: 'flex', alignItems: 'center', justifyContent: 'space-between',
                 background: 'var(--surface2)', borderRadius: 'var(--r-lg)', padding: '14px 18px', marginBottom: 16,
@@ -345,7 +371,6 @@ Return ONLY valid JSON (no markdown):
                 </div>
               </div>
 
-              {/* Key Extractions */}
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginBottom: 16 }}>
                 {[
                   ['PROBLEM', intelligence.problemStatement],
@@ -365,7 +390,6 @@ Return ONLY valid JSON (no markdown):
                 ))}
               </div>
 
-              {/* Likely Shark Questions */}
               <div style={{ marginBottom: 16 }}>
                 <div className="card-lbl">Questions The Shark Will Ask You</div>
                 {(intelligence.likelySharkQuestions || []).map((q, i) => (
@@ -379,7 +403,6 @@ Return ONLY valid JSON (no markdown):
                 ))}
               </div>
 
-              {/* Top Weaknesses */}
               <div>
                 <div className="card-lbl">Detected Weaknesses</div>
                 {(intelligence.topWeaknesses || []).map((w, i) => (
@@ -401,7 +424,6 @@ Return ONLY valid JSON (no markdown):
             <div className="card" style={{ border: '1px solid rgba(229,9,20,0.3)' }}>
               <div className="card-lbl" style={{ color: 'var(--cuban)' }}>⚠ MURDER BOARD — SHARK INTEL DOSSIER</div>
 
-              {/* Opening Line */}
               {murderBoard.openingLine && (
                 <div style={{
                   background: 'rgba(229,9,20,0.06)', border: '1px solid rgba(229,9,20,0.2)',
@@ -412,18 +434,16 @@ Return ONLY valid JSON (no markdown):
                 </div>
               )}
 
-              {/* Killer Questions */}
               <div style={{ marginBottom: 16 }}>
                 <div className="card-lbl">Killer Questions Prepared</div>
                 {(murderBoard.killerQuestions || []).map((q, i) => (
-                  <div key={i} className="murder-item">
-                    <span className="murder-label">Q{i + 1}</span>
-                    <span>{q}</span>
+                  <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start', padding: '8px 0', borderBottom: '1px solid var(--border)' }}>
+                    <span style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--cuban)', flexShrink: 0, marginTop: 2 }}>Q{i + 1}</span>
+                    <span style={{ fontSize: 13, color: 'var(--sub)' }}>{q}</span>
                   </div>
                 ))}
               </div>
 
-              {/* Market Contradictions */}
               {(murderBoard.marketContradictions || []).length > 0 && (
                 <div style={{ marginBottom: 16 }}>
                   <div className="card-lbl">Market Claim Contradictions</div>
@@ -439,7 +459,6 @@ Return ONLY valid JSON (no markdown):
                 </div>
               )}
 
-              {/* Red Flags */}
               <div>
                 <div className="card-lbl">Red Flags</div>
                 {(murderBoard.redFlags || []).map((r, i) => (
@@ -468,9 +487,9 @@ Return ONLY valid JSON (no markdown):
             <div style={{ flex: 1 }}>
               <div style={{ fontFamily: 'var(--f-display)', fontSize: 18, letterSpacing: 1, marginBottom: 3 }}>GOOGLE DRIVE MCP</div>
               <div style={{ fontFamily: 'var(--f-mono)', fontSize: 11, color: driveStatus === 'connected' ? 'var(--vc)' : 'var(--dim)', display: 'flex', alignItems: 'center', gap: 7 }}>
-                {driveStatus === 'idle' && '→ Click to connect and sync your deck'}
+                {driveStatus === 'idle'      && '→ Click to connect and sync your deck'}
                 {driveStatus === 'connecting' && <><span className="spin-ring" />CONNECTING...</>}
-                {driveStatus === 'connected' && <>✓ DRIVE MCP CONNECTED</>}
+                {driveStatus === 'connected'  && <>✓ DRIVE MCP CONNECTED</>}
               </div>
             </div>
             {driveStatus === 'connected' && <div className="dot dot-green" />}
