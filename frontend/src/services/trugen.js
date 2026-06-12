@@ -79,6 +79,9 @@ export const AGENT_IDS = {
   cuban: import.meta.env.VITE_TRUGEN_AGENT_CUBAN,
   vc:    import.meta.env.VITE_TRUGEN_AGENT_VC,
   angel: import.meta.env.VITE_TRUGEN_AGENT_ANGEL,
+  nikhil: import.meta.env.VITE_TRUGEN_AGENT_NIKHIL,
+  anupam: import.meta.env.VITE_TRUGEN_AGENT_ANUPAM,
+  aman:   import.meta.env.VITE_TRUGEN_AGENT_AMAN,
 }
 
 export function embedUrl(shark, meta = {}) {
