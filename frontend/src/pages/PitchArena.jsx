@@ -34,7 +34,7 @@ const HINT_POOL = [
 ]
 
 export default function PitchArena() {
-  const { config, setSessionData, user, deckIntelligence } = useApp()
+  const { config, setSessionData, user, deckIntelligence, setTranscript } = useApp()
   const nav = useNavigate()
 
   const [ml, setML]                     = useState(initML)
@@ -46,11 +46,12 @@ export default function PitchArena() {
   const [showPermHint, setShowPermHint] = useState(true)
   const [activeSharkIdx, setActiveSharkIdx] = useState(0) // for boardroom mode
 
-  const videoRef   = useRef()
-  const timerRef   = useRef()
-  const mlRef      = useRef()
-  const mlStateRef = useRef(ml)
-  const speechRef  = useRef(null)
+  const videoRef      = useRef()
+  const timerRef      = useRef()
+  const mlRef         = useRef()
+  const mlStateRef    = useRef(ml)
+  const speechRef     = useRef(null)
+  const transcriptRef = useRef('')
 
   useEffect(() => { mlStateRef.current = ml }, [ml])
 
@@ -68,15 +69,22 @@ export default function PitchArena() {
 
   // Real filler detection via Web Speech API
   useEffect(() => {
-    const recognition = startRealFillerDetection((word) => {
-      setML(prev => ({
-        ...prev,
-        fillerCounts: {
-          ...prev.fillerCounts,
-          [word]: (prev.fillerCounts[word] || 0) + 1,
-        },
-        fillerDensity: Math.min(8, prev.fillerDensity + 0.3),
-      }))
+    const recognition = startRealFillerDetection((word, fullTranscript) => {
+      // ← CHANGED: guard against null word (transcript-only calls)
+      if (word) {
+        setML(prev => ({
+          ...prev,
+          fillerCounts: {
+            ...prev.fillerCounts,
+            [word]: (prev.fillerCounts[word] || 0) + 1,
+          },
+          fillerDensity: Math.min(8, prev.fillerDensity + 0.3),
+        }))
+      }
+      // accumulate full transcript
+      if (fullTranscript) {
+        transcriptRef.current += ' ' + fullTranscript
+      }
     })
     speechRef.current = recognition
     return () => {
@@ -142,6 +150,7 @@ export default function PitchArena() {
     clearInterval(mlRef.current)
     if (speechRef.current) { try { speechRef.current.stop() } catch {} }
     const score = finalScore(mlStateRef.current.history)
+    setTranscript(transcriptRef.current.trim())
     setSessionData({ ...score, shark, difficulty: config.difficulty, durationSec: seconds })
     nav('/scorecard')
   }

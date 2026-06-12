@@ -11,7 +11,7 @@ const MCP_ACTIONS = [
 ]
 
 export default function Optimizer() {
-  const { sessionData, config, deckText, deckIntelligence, addSessionToPassport } = useApp()
+  const { sessionData, config, deckText, deckIntelligence, addSessionToPassport, transcript } = useApp()  // ← ADDED transcript
   const nav = useNavigate()
 
   const [activeTab, setActiveTab]   = useState('rewrite')
@@ -80,6 +80,14 @@ Session Performance:
 - Shark: ${data.shark} / Difficulty: ${data.difficulty}
 - Breakdown: ${data.breakdown.map(b => `${b.label}: ${b.pct}%`).join(', ')}`
 
+      // ← ADDED: transcript block for the prompt
+      const transcriptContext = transcript && transcript.trim().length > 0
+        ? `ACTUAL SPEECH TRANSCRIPT (what the founder really said in this session):
+${transcript.slice(0, 3000)}
+
+IMPORTANT: The "original" field in each improvement below MUST be a real quote or close paraphrase from the ACTUAL TRANSCRIPT above — not a generic placeholder.`
+        : `No transcript was captured for this session. Base the "original" fields on typical weak phrasing for the scored areas below.`
+
       const response = await fetch(CLAUDE_API, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -88,7 +96,9 @@ Session Performance:
           max_tokens: 1000,
           messages: [{
             role: 'user',
-            content: `You are a world-class pitch coach. Based on the deck and session data, provide a complete pitch optimization.
+            content: `You are a world-class pitch coach. Based on the deck, the actual transcript, and session data, provide a complete pitch optimization.
+
+${transcriptContext}
 
 DECK INTELLIGENCE:
 ${deckContext}
@@ -98,7 +108,7 @@ ${sessionContext}
 Return ONLY valid JSON (no markdown):
 {
   "improvements": [
-    {"area": "area name", "original": "what they probably said", "rewritten": "optimized version", "note": "why this is better", "pct": 82}
+    {"area": "area name", "original": "what they actually said (from transcript if available)", "rewritten": "optimized version", "note": "why this is better", "pct": 82}
   ],
   "fullScript": [
     {"section": "HOOK (0:00-0:30)", "text": "optimized hook text", "color": "#E50914"},
@@ -130,7 +140,14 @@ Return ONLY valid JSON (no markdown):
         { area: 'Market Claim', original: '"The market is huge..."', rewritten: `"${deckIntelligence?.marketSize || 'TAM'} — and we\'re targeting the highest-CAC segment first."`, note: 'Replace vague with specific.', pct: 78 },
         { area: 'Financials', original: '"We have some revenue..."', rewritten: `"${deckIntelligence?.traction || 'Traction details'} — and our unit economics are..."`, note: 'Lead with CAC/LTV ratio.', pct: 71 },
       ])
-      setScriptData([])
+      // ← CHANGED: was setScriptData([]) — now uses deck data so download isn't empty
+      setScriptData([
+        { section: 'HOOK (0:00-0:30)',     color: '#E50914', text: `We solve ${deckIntelligence?.problemStatement || 'a critical, underserved problem'} — and we already have traction to prove it.` },
+        { section: 'PROBLEM (0:30-1:30)',  color: '#F39C12', text: `${deckIntelligence?.problemStatement || 'The problem is real, urgent, and currently underserved by existing solutions.'}` },
+        { section: 'SOLUTION (1:30-2:30)', color: '#2ECC71', text: `${deckIntelligence?.solution || 'Our solution is differentiated, defensible, and built for this exact pain point.'}` },
+        { section: 'TRACTION (2:30-3:30)', color: '#2ECC71', text: `${deckIntelligence?.traction || 'We have early traction validating product-market fit and a clear path to scale.'}` },
+        { section: 'THE ASK (3:30-4:00)',  color: '#E50914', text: `${deckIntelligence?.ask || 'We are raising this round to accelerate growth and capture the market opportunity.'}` },
+      ])
       setScoreAnalysis({ topInsight: `Focus on your ${worst.label} section — it scored only ${worst.pct}%.`, nextSessionFocus: `Practice defending your financial projections with exact numbers.` })
     } finally {
       setRewriteLoading(false)

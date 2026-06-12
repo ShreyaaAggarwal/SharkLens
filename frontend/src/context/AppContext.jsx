@@ -20,6 +20,7 @@ export function AppProvider({ children }) {
   const [deckIntelligence, setDeckIntelligence] = useState(null) // Claude-analyzed deck data
   const [sessionData, setSessionData]       = useState(null)
   const [conversationId, setConversationId] = useState(null)
+  const [transcript, setTranscript]         = useState('')   // ← ADDED
 
   // ── Pitch Passport: persistent session history ──
   const [sessionHistory, setSessionHistory] = useState(() => {
@@ -87,6 +88,7 @@ export function AppProvider({ children }) {
       conversationId, setConversationId,
       sessionHistory, addSessionToPassport,
       passportStats,
+      transcript, setTranscript,   // ← ADDED
     }}>
       {children}
     </Ctx.Provider>

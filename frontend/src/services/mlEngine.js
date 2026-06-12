@@ -92,6 +92,7 @@ export function finalScore(mlHistory = []) {
     history: mlHistory,
   }
 }
+
 export function startRealFillerDetection(onFillerDetected) {
   if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
     console.warn('[ML] Web Speech API not supported')
@@ -108,11 +109,18 @@ export function startRealFillerDetection(onFillerDetected) {
 
   recognition.onresult = (event) => {
     for (let i = event.resultIndex; i < event.results.length; i++) {
-      const transcript = event.results[i][0].transcript.toLowerCase().trim()
+      const result = event.results[i]
+      const transcript = result[0].transcript.toLowerCase().trim()
+
       transcript.split(/\s+/).forEach(word => {
         const clean = word.replace(/[^a-z\s]/g, '')
         if (FILLER_SET.has(clean)) onFillerDetected(clean)
       })
+
+      // ← ADDED: pass full transcript text on final results
+      if (result.isFinal) {
+        onFillerDetected(null, result[0].transcript)
+      }
     }
   }
 
