@@ -2,7 +2,19 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 
-const CLAUDE_API = 'https://api.anthropic.com/v1/messages'
+const BACKEND = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const CLAUDE_PROXY = `${BACKEND}/api/claude/analyze`
+
+async function askClaude(prompt, maxTokens = 1200) {
+  const r = await fetch(CLAUDE_PROXY, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ prompt, maxTokens }),
+  })
+  if (!r.ok) throw new Error(`Claude proxy failed: ${r.status}`)
+  const data = await r.json()
+  return data.text || ''
+}
 
 const MCP_ACTIONS = [
   { id: 'gmail',    icon: '📧', label: 'Scorecard Report',    sub: 'Gmail MCP',    done: 'Sent to inbox ✓' },
@@ -11,7 +23,7 @@ const MCP_ACTIONS = [
 ]
 
 export default function Optimizer() {
-  const { sessionData, config, deckText, deckIntelligence, addSessionToPassport, transcript } = useApp()  // ← ADDED transcript
+  const { sessionData, config, deckText, deckIntelligence, addSessionToPassport } = useApp()
   const nav = useNavigate()
 
   const [activeTab, setActiveTab]   = useState('rewrite')
@@ -43,18 +55,19 @@ export default function Optimizer() {
     MCP_ACTIONS.forEach((a, i) => {
       setTimeout(() => setMcpDone(prev => ({ ...prev, [a.id]: true })), 1200 + i * 900)
     })
-    // Auto-generate rewrite on mount
     generateRewrite()
     return () => clearTimeout(t)
   }, [])
 
-  // Save to passport on mount
   useEffect(() => {
     if (sessionData) {
       addSessionToPassport({
         ...sessionData,
         startupName: deckIntelligence?.startupName || 'Unknown',
+        sector: deckIntelligence?.sector || '',
         fundingRound: config.fundingRound,
+        ask: deckIntelligence?.ask || '',
+        traction: deckIntelligence?.traction || '',
       })
     }
   }, [])
@@ -68,9 +81,10 @@ Sector: ${deckIntelligence.sector}
 Problem: ${deckIntelligence.problemStatement}
 Solution: ${deckIntelligence.solution}
 Market: ${deckIntelligence.marketSize}
+Business Model: ${deckIntelligence.businessModel}
 Traction: ${deckIntelligence.traction}
 Ask: ${deckIntelligence.ask}
-Weaknesses detected: ${(deckIntelligence.topWeaknesses || []).join(', ')}`
+Detected weaknesses: ${(deckIntelligence.topWeaknesses || []).join(', ')}`
         : (deckText ? deckText.slice(0, 2000) : 'No deck provided')
 
       const sessionContext = `
@@ -80,75 +94,78 @@ Session Performance:
 - Shark: ${data.shark} / Difficulty: ${data.difficulty}
 - Breakdown: ${data.breakdown.map(b => `${b.label}: ${b.pct}%`).join(', ')}`
 
-      // ← ADDED: transcript block for the prompt
-      const transcriptContext = transcript && transcript.trim().length > 0
-        ? `ACTUAL SPEECH TRANSCRIPT (what the founder really said in this session):
-${transcript.slice(0, 3000)}
+      const prompt = `You are a world-class pitch coach for first-time/student founders. Based on the deck intelligence and session performance data below, suggest concrete improvements to how this founder should phrase key parts of their pitch.
 
-IMPORTANT: The "original" field in each improvement below MUST be a real quote or close paraphrase from the ACTUAL TRANSCRIPT above — not a generic placeholder.`
-        : `No transcript was captured for this session. Base the "original" fields on typical weak phrasing for the scored areas below.`
-
-      const response = await fetch(CLAUDE_API, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1000,
-          messages: [{
-            role: 'user',
-            content: `You are a world-class pitch coach. Based on the deck, the actual transcript, and session data, provide a complete pitch optimization.
-
-${transcriptContext}
+IMPORTANT: Do NOT invent or fabricate quotes from the founder. You do not have a transcript. Instead, based on what the deck says, write:
+- "current": what the deck currently communicates or how founders typically phrase this weakness
+- "suggested": a stronger, investor-ready version they should say out loud
+- "note": why this phrasing works better, in simple words
 
 DECK INTELLIGENCE:
 ${deckContext}
 
 ${sessionContext}
 
-Return ONLY valid JSON (no markdown):
+Return ONLY valid JSON (no markdown fences):
 {
   "improvements": [
-    {"area": "area name", "original": "what they actually said (from transcript if available)", "rewritten": "optimized version", "note": "why this is better", "pct": 82}
+    {
+      "area": "area name (e.g. Opening Hook, Market Claim, Traction Story)",
+      "current": "how this is typically (or weakly) communicated based on the deck data",
+      "suggested": "the stronger version they should say — specific to THEIR deck content",
+      "note": "why this is better, in 1-2 simple sentences",
+      "pct": 82
+    }
   ],
   "fullScript": [
-    {"section": "HOOK (0:00-0:30)", "text": "optimized hook text", "color": "#E50914"},
-    {"section": "PROBLEM (0:30-1:30)", "text": "optimized problem text", "color": "#F39C12"},
-    {"section": "SOLUTION (1:30-2:30)", "text": "optimized solution text", "color": "#2ECC71"},
-    {"section": "TRACTION (2:30-3:30)", "text": "optimized traction text", "color": "#2ECC71"},
-    {"section": "THE ASK (3:30-4:00)", "text": "optimized ask text", "color": "#E50914"}
+    {"section": "HOOK (0:00-0:30)", "text": "optimized hook text based on their actual deck", "color": "#E50914"},
+    {"section": "PROBLEM (0:30-1:30)", "text": "optimized problem statement based on their actual deck", "color": "#F39C12"},
+    {"section": "SOLUTION (1:30-2:30)", "text": "optimized solution based on their actual deck", "color": "#2ECC71"},
+    {"section": "TRACTION (2:30-3:30)", "text": "optimized traction narrative based on their actual deck", "color": "#2ECC71"},
+    {"section": "THE ASK (3:30-4:00)", "text": "optimized ask based on their actual deck", "color": "#E50914"}
   ],
-  "topInsight": "The single most important thing to fix before next pitch",
-  "nextSessionFocus": "What to specifically practice next time"
+  "topInsight": "The single most important thing to fix, in simple words — specific to this deck",
+  "nextSessionFocus": "What to specifically practice next time, in simple words"
 }`
-          }]
-        })
-      })
 
-      if (!response.ok) throw new Error('API failed')
-      const apiData = await response.json()
-      const raw = apiData.content?.[0]?.text || '{}'
+      const raw = await askClaude(prompt, 1200)
       const clean = raw.replace(/```json|```/g, '').trim()
-      const parsed = JSON.parse(clean)
+      const start = clean.indexOf('{')
+      const end = clean.lastIndexOf('}')
+      const parsed = JSON.parse(clean.slice(start, end + 1))
       setRewriteData(parsed.improvements || [])
       setScriptData(parsed.fullScript || [])
       setScoreAnalysis({ topInsight: parsed.topInsight, nextSessionFocus: parsed.nextSessionFocus })
     } catch (err) {
       console.error('Rewrite generation failed:', err)
-      // Fallback data
       setRewriteData([
-        { area: 'Opening Hook', original: '"So, um, we\'re building a platform..."', rewritten: `"We're building ${deckIntelligence?.solution || 'the solution'} — and we have traction to prove it."`, note: 'Lead with proof, not description.', pct: 85 },
-        { area: 'Market Claim', original: '"The market is huge..."', rewritten: `"${deckIntelligence?.marketSize || 'TAM'} — and we\'re targeting the highest-CAC segment first."`, note: 'Replace vague with specific.', pct: 78 },
-        { area: 'Financials', original: '"We have some revenue..."', rewritten: `"${deckIntelligence?.traction || 'Traction details'} — and our unit economics are..."`, note: 'Lead with CAC/LTV ratio.', pct: 71 },
+        {
+          area: 'Opening Hook',
+          current: `The deck leads with the solution before establishing why the problem is urgent.`,
+          suggested: `"Every day, [specific user] loses [specific cost/time] because [core problem]. We built ${deckIntelligence?.startupName || 'this'} to fix exactly that — and we already have traction."`,
+          note: 'Open with the pain, not the product. Investors fund problems, not features.',
+          pct: 85,
+        },
+        {
+          area: 'Market Claim',
+          current: `Market size stated as "${deckIntelligence?.marketSize || 'a large number'}" without a bottom-up breakdown.`,
+          suggested: `"We're targeting [specific segment] — that's [number] customers at [price point], giving us a reachable market of [₹X]. Here's how we get the first 1,000."`,
+          note: 'Sharks trust bottom-up math more than top-down TAM claims.',
+          pct: 78,
+        },
+        {
+          area: 'Traction Story',
+          current: `Traction section says: "${deckIntelligence?.traction || 'Not stated'}" — needs a narrative arc.`,
+          suggested: `"In [timeframe], we went from [starting point] to [current milestone]. Our [key metric] is growing [X]% month-on-month."`,
+          note: 'Show the trajectory, not just the number. Growth rate is more convincing than absolute figures.',
+          pct: 71,
+        },
       ])
-      // ← CHANGED: was setScriptData([]) — now uses deck data so download isn't empty
-      setScriptData([
-        { section: 'HOOK (0:00-0:30)',     color: '#E50914', text: `We solve ${deckIntelligence?.problemStatement || 'a critical, underserved problem'} — and we already have traction to prove it.` },
-        { section: 'PROBLEM (0:30-1:30)',  color: '#F39C12', text: `${deckIntelligence?.problemStatement || 'The problem is real, urgent, and currently underserved by existing solutions.'}` },
-        { section: 'SOLUTION (1:30-2:30)', color: '#2ECC71', text: `${deckIntelligence?.solution || 'Our solution is differentiated, defensible, and built for this exact pain point.'}` },
-        { section: 'TRACTION (2:30-3:30)', color: '#2ECC71', text: `${deckIntelligence?.traction || 'We have early traction validating product-market fit and a clear path to scale.'}` },
-        { section: 'THE ASK (3:30-4:00)',  color: '#E50914', text: `${deckIntelligence?.ask || 'We are raising this round to accelerate growth and capture the market opportunity.'}` },
-      ])
-      setScoreAnalysis({ topInsight: `Focus on your ${worst.label} section — it scored only ${worst.pct}%.`, nextSessionFocus: `Practice defending your financial projections with exact numbers.` })
+      setScriptData([])
+      setScoreAnalysis({
+        topInsight: `Your ${worst.label} section scored ${worst.pct}% — the deck's content here needs to be translated into clearer spoken language.`,
+        nextSessionFocus: `Practice defending your ${worst.label} with 2-3 specific numbers. Don't use vague language like "a lot" or "significant".`,
+      })
     } finally {
       setRewriteLoading(false)
     }
@@ -233,24 +250,34 @@ Return ONLY valid JSON (no markdown):
             {rewriteLoading ? (
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, padding: '60px 0', color: 'var(--sub)' }}>
                 <span className="spin-ring" />
-                <span style={{ fontFamily: 'var(--f-mono)', fontSize: 12 }}>CLAUDE REWRITING YOUR PITCH...</span>
+                <span style={{ fontFamily: 'var(--f-mono)', fontSize: 12 }}>CLAUDE ANALYSING YOUR DECK...</span>
               </div>
             ) : (
               <>
+                {/* Framing note */}
+                <div style={{
+                  fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--dim)',
+                  marginBottom: 18, padding: '8px 14px',
+                  background: 'var(--surface2)', borderRadius: 'var(--r)',
+                  border: '1px solid var(--border)',
+                }}>
+                  📋 Based on your deck content and session score — these are suggested phrasings to use out loud, not a transcript.
+                </div>
+
                 {(rewriteData || []).map((item, i) => (
                   <div key={i} className="card" style={{ marginBottom: 14 }}>
                     <div style={{ display: 'flex', gap: 12, alignItems: 'center', marginBottom: 14 }}>
                       <div style={{ fontFamily: 'var(--f-display)', fontSize: 16, letterSpacing: .5 }}>{item.area}</div>
-                      <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--vc)' }}>+{item.pct}% improvement</div>
+                      <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--vc)' }}>↑ {item.pct}% stronger</div>
                     </div>
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                       <div style={{ background: 'var(--surface2)', borderRadius: 'var(--r)', padding: '12px 14px', borderLeft: '2px solid var(--border2)' }}>
-                        <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--dim)', letterSpacing: 2, marginBottom: 6 }}>ORIGINAL</div>
-                        <div style={{ fontSize: 13, color: 'var(--sub)', lineHeight: 1.6, fontStyle: 'italic' }}>{item.original}</div>
+                        <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--dim)', letterSpacing: 2, marginBottom: 6 }}>AS CURRENTLY FRAMED</div>
+                        <div style={{ fontSize: 13, color: 'var(--sub)', lineHeight: 1.6 }}>{item.current}</div>
                       </div>
                       <div style={{ background: 'rgba(46,204,113,0.04)', borderRadius: 'var(--r)', padding: '12px 14px', borderLeft: '2px solid var(--vc)' }}>
-                        <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--vc)', letterSpacing: 2, marginBottom: 6 }}>OPTIMISED</div>
-                        <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6, fontStyle: 'italic' }}>{item.rewritten}</div>
+                        <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--vc)', letterSpacing: 2, marginBottom: 6 }}>SAY IT LIKE THIS</div>
+                        <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6, fontStyle: 'italic' }}>{item.suggested}</div>
                       </div>
                     </div>
                     <div style={{ marginTop: 10, fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--vc)' }}>✓ {item.note}</div>
