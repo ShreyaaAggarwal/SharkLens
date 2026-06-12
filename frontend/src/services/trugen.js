@@ -1,5 +1,10 @@
 // TruGen AI API client
 // Docs: https://docs.trugen.ai
+//
+// NOTE: embedUrl() is called once per shark in BoardroomLayout — each shark
+// gets its own independent TruGen iframe session via its unique agentId.
+// Multiple simultaneous sessions are fully supported.
+
 const API = 'https://api.trugen.ai/v1'
 const KEY = import.meta.env.VITE_TRUGEN_API_KEY || '0de547228f7648f1be83428a44865cba'
 
@@ -74,16 +79,22 @@ export async function listAvatars() {
   return r.json()
 }
 
-/* ---- Embed URL ---- */
+/* ---- Agent IDs ---- */
+// Each investor has a dedicated TruGen agent with a unique ID.
+// In BoardroomLayout, embedUrl() is called for every selected shark,
+// producing N independent iframe sessions rendered simultaneously.
 export const AGENT_IDS = {
-  cuban: import.meta.env.VITE_TRUGEN_AGENT_CUBAN,
-  vc:    import.meta.env.VITE_TRUGEN_AGENT_VC,
-  angel: import.meta.env.VITE_TRUGEN_AGENT_ANGEL,
+  cuban:  import.meta.env.VITE_TRUGEN_AGENT_CUBAN,
+  vc:     import.meta.env.VITE_TRUGEN_AGENT_VC,
+  angel:  import.meta.env.VITE_TRUGEN_AGENT_ANGEL,
   nikhil: import.meta.env.VITE_TRUGEN_AGENT_NIKHIL,
   anupam: import.meta.env.VITE_TRUGEN_AGENT_ANUPAM,
   aman:   import.meta.env.VITE_TRUGEN_AGENT_AMAN,
 }
 
+/* ---- Embed URL ---- */
+// Returns the TruGen embed URL for a given shark's agent.
+// Called once per shark panel in boardroom mode — each produces an independent session.
 export function embedUrl(shark, meta = {}) {
   const agentId = AGENT_IDS[shark] || AGENT_IDS.cuban
   if (!agentId) return null
@@ -93,7 +104,6 @@ export function embedUrl(shark, meta = {}) {
   const qs = p.toString()
   return `https://app.trugen.ai/embed/${agentId}?${qs}`
 }
-
 
 /* ---- Shark system prompts ---- */
 export function sharkPrompt(shark, difficulty, bilingual) {
@@ -109,9 +119,9 @@ PERSONALITY: Ask if the app works on 2G and Redmi phones. Demand Tier 2/3 city s
 EVALUATION: Score on India-market fit, Unit Economics, Scalability, Regulation-readiness, Team.`,
   }
   const diff = {
-    Easy:     '\n\nMODE: Encouraging. Give founders time. Ask helpful follow-ups.',
-    Realistic:'\n\nMODE: Real pressure. Let them finish sentences before pushing back.',
-    Hardcore: '\n\nMODE: MAXIMUM AGGRESSION. Interrupt constantly. Express visible frustration. No softening.',
+    Easy:      '\n\nMODE: Encouraging. Give founders time. Ask helpful follow-ups.',
+    Realistic: '\n\nMODE: Real pressure. Let them finish sentences before pushing back.',
+    Hardcore:  '\n\nMODE: MAXIMUM AGGRESSION. Interrupt constantly. Express visible frustration. No softening.',
   }
   const lang = bilingual ? '\n\nBILINGUAL: Respond in whatever language the founder uses (EN/HI mix is fine).' : ''
   return (voices[shark] || voices.cuban) + (diff[difficulty] || diff.Realistic) + lang +

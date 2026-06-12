@@ -51,48 +51,36 @@ const HINT_POOL = [
   'If you don\'t know the number, say you\'ll follow up. Never guess.',
 ]
 
-// ─── Boardroom layout config ───────────────────────────────────────────────────
-const BOARDROOM_STYLES = {
-  wrapper: {
-    display: 'flex',
-    flexDirection: 'column',
-    width: '100%',
-    height: '100%',
-    background: '#060608',
-    overflow: 'hidden',
-    position: 'relative',
-  },
-  mainSlot: {
-    flex: 1,
-    position: 'relative',
-    overflow: 'hidden',
-    minHeight: 0,
-    borderRadius: 0,
-    transition: 'box-shadow .4s ease',
-  },
-  participantStrip: {
-    display: 'flex',
-    flexDirection: 'row',
-    gap: 8,
-    padding: '8px 12px',
-    background: 'rgba(10,12,16,0.92)',
-    borderTop: '1px solid var(--border)',
-    flexShrink: 0,
-    alignItems: 'center',
-    overflowX: 'auto',
-    minHeight: 64,
-  },
+// ─── Grid layout calculator ───────────────────────────────────────────────────
+// Returns CSS grid-template-columns value based on shark count
+function getGridColumns(count) {
+  if (count === 1) return '1fr'
+  if (count === 2) return '1fr 1fr'
+  if (count <= 4)  return '1fr 1fr'          // 2×2
+  return '1fr 1fr 1fr'                        // 3×2 for 5 or 6
 }
 
-// Pulsing glow for active speaker's main panel + badge fade-in
-const GLOW_KEYFRAMES = `
+// ─── Keyframes ────────────────────────────────────────────────────────────────
+const KEYFRAMES = `
 @keyframes boardroomGlowPulse {
-  0%, 100% { box-shadow: inset 0 0 0 2px var(--glow), 0 0 26px 2px var(--glow-soft); }
-  50%      { box-shadow: inset 0 0 0 2px var(--glow), 0 0 42px 8px var(--glow-soft); }
+  0%, 100% { box-shadow: 0 0 0 2px var(--panel-glow), 0 0 28px 4px var(--panel-glow-soft); }
+  50%       { box-shadow: 0 0 0 2px var(--panel-glow), 0 0 52px 12px var(--panel-glow-soft); }
 }
 @keyframes badgeFade {
-  from { opacity: 0; transform: translateY(-4px); }
+  from { opacity: 0; transform: translateY(-6px); }
   to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes waveBar {
+  0%, 100% { transform: scaleY(0.4); }
+  50%       { transform: scaleY(1); }
+}
+@keyframes pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.95); }
+}
+@keyframes activeDot {
+  0%, 100% { box-shadow: 0 0 0 0 var(--panel-glow); opacity: 1; }
+  50%       { box-shadow: 0 0 0 5px transparent; opacity: 0.7; }
 }
 `
 
@@ -109,7 +97,6 @@ export default function PitchArena() {
   const [showPermHint, setShowPermHint]     = useState(true)
   const [activeSharkIdx, setActiveSharkIdx] = useState(0)
 
-  // ── No camera state/refs — TruGen owns the video feed ──
   const timerRef      = useRef()
   const mlRef         = useRef()
   const mlStateRef    = useRef(ml)
@@ -130,7 +117,7 @@ export default function PitchArena() {
     return () => clearInterval(mlRef.current)
   }, [])
 
-  // Real filler detection via Web Speech API — mic only, no camera
+  // Real filler detection via Web Speech API
   useEffect(() => {
     const recognition = startRealFillerDetection((word, fullTranscript) => {
       if (word) {
@@ -155,13 +142,13 @@ export default function PitchArena() {
     }
   }, [])
 
-  // Boardroom: rotate active shark every 45s
+  // Boardroom: rotate active shark every 60s
   useEffect(() => {
     if (config.sessionMode !== 'boardroom') return
     const sharks = config.boardroomSharks || config.selectedSharks || ['cuban', 'angel']
     const iv = setInterval(() => {
       setActiveSharkIdx(i => (i + 1) % sharks.length)
-    }, 45000)
+    }, 60000)
     return () => clearInterval(iv)
   }, [config.sessionMode, config.boardroomSharks, config.selectedSharks])
 
@@ -177,7 +164,8 @@ export default function PitchArena() {
   const activeShark = isBoardroom ? boardSharks[activeSharkIdx] : (config.shark || 'cuban')
   const sharkColor  = SHARK_COL[activeShark]
 
-  const iframeUrl = embedUrl(activeShark, {
+  // Solo mode iframe URL (boardroom builds its own per-shark URLs)
+  const soloIframeUrl = embedUrl(activeShark, {
     username: user?.name  || 'Founder',
     userId:   user?.email || 'sharklens-user',
   })
@@ -229,14 +217,11 @@ export default function PitchArena() {
                 activeSharkIdx={activeSharkIdx}
                 setActiveSharkIdx={setActiveSharkIdx}
                 user={user}
-                iframeUrl={iframeUrl}
-                activeShark={activeShark}
-                sharkColor={sharkColor}
               />
             )
             : (
               <SoloSharkLayout
-                iframeUrl={iframeUrl}
+                iframeUrl={soloIframeUrl}
                 shark={activeShark}
                 sharkColor={sharkColor}
               />
@@ -317,19 +302,30 @@ function TopBar({ recStr, isBoardroom, boardSharks, activeSharkIdx, activeShark,
         )}
       </div>
 
-      {/* Center: shark tabs (boardroom) or label (solo) */}
+      {/* Center: active shark indicator (boardroom) or label (solo) */}
       {isBoardroom ? (
-        <div style={{ display: 'flex', gap: 6 }}>
+        <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+          <span style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--dim)', letterSpacing: 1.5 }}>
+            ACTIVE:
+          </span>
           {boardSharks.map((s, i) => (
             <div key={s} style={{
-              padding: '4px 12px', borderRadius: 20,
+              padding: '3px 10px', borderRadius: 20,
               background: i === activeSharkIdx ? SHARK_COL[s] + '20' : 'transparent',
               border: `1px solid ${i === activeSharkIdx ? SHARK_COL[s] : 'var(--border)'}`,
               fontFamily: 'var(--f-mono)', fontSize: 10,
               color: i === activeSharkIdx ? SHARK_COL[s] : 'var(--dim)',
               transition: 'all .3s',
+              display: 'flex', alignItems: 'center', gap: 5,
             }}>
-              {SHARK_INI[s]} {i === activeSharkIdx && '← ACTIVE'}
+              {i === activeSharkIdx && (
+                <span style={{
+                  width: 5, height: 5, borderRadius: '50%',
+                  background: SHARK_COL[s], display: 'inline-block',
+                  animation: 'pulse 1.5s infinite',
+                }} />
+              )}
+              {SHARK_INI[s]}
             </div>
           ))}
         </div>
@@ -381,214 +377,207 @@ function SoloSharkLayout({ iframeUrl, shark, sharkColor }) {
 }
 
 // ─── Boardroom Layout ─────────────────────────────────────────────────────────
-// Google Meet / Zoom style:
-//   - Large main slot = currently active/speaking shark (TruGen iframe)
-//   - Bottom strip = ALL other selected sharks + Founder tile, always visible
-//   - Clicking a participant card switches the active speaker (no route change)
+//
+// REAL BOARDROOM — Google Meet / Zoom style grid.
+// Every selected investor gets their own visible panel with a live TruGen iframe.
+// Active investor has a glowing border + ACTIVE badge.
+// No hidden investors. No tabs. No carousel.
+//
+// Layout rules:
+//   1 investor  → 1 panel  (full area)
+//   2 investors → 2 columns
+//   3–4         → 2×2 grid
+//   5–6         → 3×2 grid
 
-function BoardroomLayout({ boardSharks, activeSharkIdx, setActiveSharkIdx, user, iframeUrl, activeShark, sharkColor }) {
-  const participants = boardSharks.filter((_, i) => i !== activeSharkIdx)
+function BoardroomLayout({ boardSharks, activeSharkIdx, setActiveSharkIdx, user }) {
+  const count = boardSharks.length
+  const cols  = getGridColumns(count)
 
   return (
-    <div style={BOARDROOM_STYLES.wrapper}>
-      <style>{GLOW_KEYFRAMES}</style>
+    <div style={{
+      position: 'absolute',
+      inset: 0,
+      display: 'grid',
+      gridTemplateColumns: cols,
+      gridAutoRows: count <= 2 ? '1fr' : '1fr',
+      gap: 3,
+      background: '#020204',
+      padding: 3,
+      boxSizing: 'border-box',
+    }}>
+      <style>{KEYFRAMES}</style>
 
-      {/* ── Main active shark slot ── */}
-      <div
-        style={{
-          ...BOARDROOM_STYLES.mainSlot,
-          '--glow': sharkColor,
-          '--glow-soft': `${sharkColor}55`,
-          animation: 'boardroomGlowPulse 2.6s ease-in-out infinite',
-        }}
-      >
-        {iframeUrl ? (
-          <iframe
-            key={activeShark} // remount iframe when active shark changes
-            src={iframeUrl}
-            allow="camera *; microphone *; autoplay *; display-capture *; fullscreen *"
-            style={{ width: '100%', height: '100%', border: 'none', display: 'block' }}
-            title={`TruGen AI Agent — ${SHARK_LABEL[activeShark]}`}
+      {boardSharks.map((shark, idx) => {
+        const isActive   = idx === activeSharkIdx
+        const color      = SHARK_COL[shark]
+        const iframeUrl  = embedUrl(shark, {
+          username: user?.name  || 'Founder',
+          userId:   user?.email || 'sharklens-user',
+        })
+
+        return (
+          <SharkPanel
+            key={shark}
+            shark={shark}
+            sharkColor={color}
+            iframeUrl={iframeUrl}
+            isActive={isActive}
+            onClick={() => setActiveSharkIdx(idx)}
+            totalCount={count}
           />
-        ) : (
-          <AgentPlaceholder shark={activeShark} sharkColor={sharkColor} />
-        )}
-
-        {/* Active badge + speaking indicator */}
-        <div style={{
-          position: 'absolute', top: 12, left: 12,
-          background: 'rgba(10,12,16,0.85)', border: `1px solid ${sharkColor}`,
-          borderRadius: 'var(--r-lg)', padding: '6px 14px',
-          fontFamily: 'var(--f-mono)', fontSize: 10, color: sharkColor,
-          backdropFilter: 'blur(8px)', zIndex: 10,
-          display: 'flex', alignItems: 'center', gap: 8,
-          letterSpacing: 1.5, animation: 'badgeFade .3s ease',
-        }}>
-          <span style={{
-            width: 7, height: 7, borderRadius: '50%',
-            background: sharkColor, display: 'inline-block',
-            animation: 'pulse 1.5s infinite',
-            boxShadow: `0 0 8px ${sharkColor}`,
-          }} />
-          {SHARK_LABEL[activeShark]} · ACTIVE · SPEAKING
-        </div>
-
-        {/* Investor count badge */}
-        <div style={{
-          position: 'absolute', bottom: 12, right: 12,
-          background: 'rgba(10,12,16,0.85)', border: '1px solid var(--border)',
-          borderRadius: 'var(--r-lg)', padding: '4px 10px',
-          fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--dim)',
-          letterSpacing: 1.5, zIndex: 10, backdropFilter: 'blur(8px)',
-        }}>
-          {boardSharks.length} INVESTOR{boardSharks.length > 1 ? 'S' : ''} ON CALL
-        </div>
-      </div>
-
-      {/* ── Participant strip: every non-active shark + founder, ALWAYS visible ── */}
-      <div style={BOARDROOM_STYLES.participantStrip}>
-        <span style={{
-          fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--dim)',
-          letterSpacing: 1.5, marginRight: 4, whiteSpace: 'nowrap', flexShrink: 0,
-        }}>
-          PANEL
-        </span>
-
-        {participants.map((s) => {
-          const originalIdx = boardSharks.indexOf(s)
-          return (
-            <ParticipantCard
-              key={s}
-              shark={s}
-              sharkColor={SHARK_COL[s]}
-              onClick={() => setActiveSharkIdx(originalIdx)}
-            />
-          )
-        })}
-
-        <FounderCard user={user} />
-      </div>
+        )
+      })}
     </div>
   )
 }
 
-// ─── Participant Card ─────────────────────────────────────────────────────────
-// Shown in the strip for each non-active shark. Click to make active.
+// ─── Shark Panel ──────────────────────────────────────────────────────────────
+// Individual investor panel. Always visible. Active = glow + badge.
 
-function ParticipantCard({ shark, sharkColor, onClick }) {
+function SharkPanel({ shark, sharkColor, iframeUrl, isActive, onClick, totalCount }) {
   const [hovered, setHovered] = useState(false)
 
+  const panelStyle = {
+    position: 'relative',
+    borderRadius: 6,
+    overflow: 'hidden',
+    cursor: isActive ? 'default' : 'pointer',
+    transition: 'box-shadow .4s ease',
+    background: '#0a0c10',
+    // CSS custom props for the animation
+    '--panel-glow':      sharkColor,
+    '--panel-glow-soft': `${sharkColor}44`,
+    // Active: animated glow border. Hovered (non-active): subtle glow.
+    boxShadow: isActive
+      ? undefined  // handled by animation below
+      : hovered
+        ? `0 0 0 1px ${sharkColor}60, 0 0 16px 2px ${sharkColor}22`
+        : '0 0 0 1px rgba(255,255,255,0.06)',
+    animation: isActive ? 'boardroomGlowPulse 2.6s ease-in-out infinite' : 'none',
+  }
+
   return (
     <div
-      onClick={onClick}
+      style={panelStyle}
+      onClick={isActive ? undefined : onClick}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      title={`Switch to ${SHARK_LABEL[shark]}`}
-      style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '6px 12px',
-        background: hovered ? `${sharkColor}15` : 'rgba(26,29,36,0.9)',
-        border: `1px solid ${hovered ? sharkColor : 'var(--border)'}`,
-        borderRadius: 'var(--r-lg)',
-        cursor: 'pointer',
-        transition: 'all .2s',
-        flexShrink: 0,
-        minWidth: 130,
-      }}
+      title={isActive ? undefined : `Click to focus ${SHARK_LABEL[shark]}`}
     >
-      {/* Avatar circle */}
-      <div style={{
-        width: 32, height: 32, borderRadius: '50%',
-        background: `${sharkColor}20`,
-        border: `1px solid ${sharkColor}50`,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0,
-      }}>
-        <span style={{ fontFamily: 'var(--f-display)', fontSize: 11, color: sharkColor }}>
-          {SHARK_INI[shark]}
-        </span>
-      </div>
+      {/* TruGen iframe — always rendered, always visible */}
+      {iframeUrl ? (
+        <iframe
+          src={iframeUrl}
+          allow="camera *; microphone *; autoplay *; display-capture *; fullscreen *"
+          style={{
+            width: '100%',
+            height: '100%',
+            border: 'none',
+            display: 'block',
+            // Slightly dim non-active panels so active one feels highlighted
+            filter: isActive ? 'none' : 'brightness(0.82) saturate(0.9)',
+            transition: 'filter .4s ease',
+          }}
+          title={`TruGen AI Agent — ${SHARK_LABEL[shark]}`}
+        />
+      ) : (
+        <AgentPlaceholder shark={shark} sharkColor={sharkColor} />
+      )}
 
-      {/* Info */}
-      <div>
-        <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--sub)', lineHeight: 1 }}>
-          {SHARK_LABEL[shark]}
-        </div>
-        <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--dim)', marginTop: 2 }}>
-          {SHARK_MODE[shark]} · LISTENING
-        </div>
-      </div>
-
-      {/* Listening indicator */}
-      <div style={{ marginLeft: 'auto', display: 'flex', gap: 2, alignItems: 'flex-end', height: 14 }}>
-        {[0.4, 0.7, 1, 0.6, 0.3].map((h, i) => (
-          <div key={i} style={{
-            width: 2, height: `${h * 100}%`,
-            background: sharkColor, borderRadius: 1, opacity: 0.5,
-            animation: `waveBar 1.6s ease ${i * 0.15}s infinite`,
+      {/* ── ACTIVE badge — top left ── */}
+      {isActive && (
+        <div style={{
+          position: 'absolute', top: 10, left: 10,
+          background: 'rgba(8,10,14,0.90)',
+          border: `1px solid ${sharkColor}`,
+          borderRadius: 20,
+          padding: '5px 12px',
+          fontFamily: 'var(--f-mono)', fontSize: 10,
+          color: sharkColor,
+          backdropFilter: 'blur(8px)',
+          zIndex: 10,
+          display: 'flex', alignItems: 'center', gap: 7,
+          letterSpacing: 1.4,
+          animation: 'badgeFade .35s ease',
+          pointerEvents: 'none',
+        }}>
+          {/* Pulsing dot */}
+          <span style={{
+            width: 6, height: 6, borderRadius: '50%',
+            background: sharkColor,
+            display: 'inline-block',
+            animation: 'activeDot 1.4s ease-in-out infinite',
           }} />
-        ))}
-      </div>
-    </div>
-  )
-}
+          ACTIVE · SPEAKING
+        </div>
+      )}
 
-// ─── Founder Card ──────────────────────────────────────────────────────────────
-// Always-visible tile representing the pitching founder (you), in the strip.
-
-function FounderCard({ user }) {
-  const name = user?.name || 'Founder'
-  const initials = name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map(w => w[0].toUpperCase())
-    .join('')
-
-  return (
-    <div
-      title="You — Founder"
-      style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '6px 12px',
-        background: 'rgba(46,204,113,0.06)',
-        border: '1px solid rgba(46,204,113,0.35)',
-        borderRadius: 'var(--r-lg)',
-        flexShrink: 0,
-        minWidth: 130,
-      }}
-    >
+      {/* ── Shark name label — bottom left ── */}
       <div style={{
-        width: 32, height: 32, borderRadius: '50%',
-        background: 'rgba(46,204,113,0.15)',
-        border: '1px solid rgba(46,204,113,0.5)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0,
+        position: 'absolute', bottom: 0, left: 0, right: 0,
+        background: 'linear-gradient(to top, rgba(4,5,8,0.92) 0%, transparent 100%)',
+        padding: '18px 12px 10px',
+        pointerEvents: 'none',
+        zIndex: 9,
       }}>
-        <span style={{ fontFamily: 'var(--f-display)', fontSize: 11, color: 'var(--vc)' }}>
-          {initials || 'YOU'}
-        </span>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          {/* Speaking wave bars when active */}
+          {isActive && (
+            <div style={{ display: 'flex', gap: 2, alignItems: 'flex-end', height: 14, flexShrink: 0 }}>
+              {[0.4, 0.75, 1, 0.6, 0.35].map((h, i) => (
+                <div key={i} style={{
+                  width: 2.5,
+                  height: `${h * 100}%`,
+                  background: sharkColor,
+                  borderRadius: 1,
+                  animation: `waveBar 1.4s ease ${i * 0.13}s infinite`,
+                }} />
+              ))}
+            </div>
+          )}
+
+          <div>
+            <div style={{
+              fontFamily: 'var(--f-mono)', fontSize: totalCount > 4 ? 9 : 11,
+              color: isActive ? sharkColor : 'var(--sub)',
+              letterSpacing: 1.2,
+              transition: 'color .3s',
+            }}>
+              {SHARK_LABEL[shark]}
+            </div>
+            <div style={{
+              fontFamily: 'var(--f-mono)', fontSize: 9,
+              color: isActive ? `${sharkColor}bb` : 'var(--dim)',
+              letterSpacing: 1,
+              marginTop: 1,
+            }}>
+              {SHARK_MODE[shark]} {isActive ? '· SPEAKING' : '· LISTENING'}
+            </div>
+          </div>
+        </div>
       </div>
 
-      <div>
-        <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--sub)', lineHeight: 1 }}>
-          {name}
+      {/* ── Hover click-to-focus tooltip for non-active panels ── */}
+      {!isActive && hovered && (
+        <div style={{
+          position: 'absolute', top: 10, left: 10,
+          background: 'rgba(8,10,14,0.88)',
+          border: '1px solid var(--border)',
+          borderRadius: 16,
+          padding: '4px 10px',
+          fontFamily: 'var(--f-mono)', fontSize: 9,
+          color: 'var(--dim)',
+          letterSpacing: 1.2,
+          backdropFilter: 'blur(6px)',
+          zIndex: 10,
+          pointerEvents: 'none',
+          animation: 'badgeFade .2s ease',
+        }}>
+          CLICK TO FOCUS
         </div>
-        <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--vc)', marginTop: 2 }}>
-          YOU · FOUNDER
-        </div>
-      </div>
-
-      {/* Mic-on indicator */}
-      <div style={{ marginLeft: 'auto', display: 'flex', gap: 2, alignItems: 'flex-end', height: 14 }}>
-        {[0.5, 0.8, 1, 0.6, 0.4].map((h, i) => (
-          <div key={i} style={{
-            width: 2, height: `${h * 100}%`,
-            background: 'var(--vc)', borderRadius: 1, opacity: 0.6,
-            animation: `waveBar 1.6s ease ${i * 0.15}s infinite`,
-          }} />
-        ))}
-      </div>
+      )}
     </div>
   )
 }

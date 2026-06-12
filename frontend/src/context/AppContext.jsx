@@ -6,21 +6,26 @@ export const useApp = () => useContext(Ctx)
 export function AppProvider({ children }) {
   const [user, setUser]       = useState(null)
   const [config, setConfig]   = useState({
-    shark:          'cuban',
-    difficulty:     'Realistic',
-    bilingual:      false,
-    duration:       10,
-    agentId:        import.meta.env.VITE_TRUGEN_AGENT_ID || '',
-    fundingRound:   'seed',
-    sessionMode:    'solo',
-    boardroomSharks: ['cuban', 'angel'],
+    shark:           'cuban',
+    difficulty:      'Realistic',
+    bilingual:       false,
+    duration:        10,
+    agentId:         import.meta.env.VITE_TRUGEN_AGENT_ID || '',
+    fundingRound:    'seed',
+    sessionMode:     'solo',
+    // boardroomSharks: the investor panel for boardroom mode.
+    // This is the authoritative list — updated when the user selects investors
+    // in the lobby/setup screen. Defaults to all 6 investors.
+    boardroomSharks: ['cuban', 'vc', 'angel', 'nikhil', 'anupam', 'aman'],
+    // selectedSharks: alias used by some screens — kept in sync via updateConfig.
+    selectedSharks:  ['cuban', 'vc', 'angel', 'nikhil', 'anupam', 'aman'],
   })
-  const [deckFile, setDeckFile]             = useState(null)
-  const [deckText, setDeckText]             = useState('')
-  const [deckIntelligence, setDeckIntelligence] = useState(null) // Claude-analyzed deck data
-  const [sessionData, setSessionData]       = useState(null)
-  const [conversationId, setConversationId] = useState(null)
-  const [transcript, setTranscript]         = useState('')   // ← ADDED
+  const [deckFile, setDeckFile]                     = useState(null)
+  const [deckText, setDeckText]                     = useState('')
+  const [deckIntelligence, setDeckIntelligence]     = useState(null)
+  const [sessionData, setSessionData]               = useState(null)
+  const [conversationId, setConversationId]         = useState(null)
+  const [transcript, setTranscript]                 = useState('')
 
   // ── Pitch Passport: persistent session history ──
   const [sessionHistory, setSessionHistory] = useState(() => {
@@ -39,21 +44,35 @@ export function AppProvider({ children }) {
 
   const addSessionToPassport = useCallback((session) => {
     const entry = {
-      id: Date.now(),
-      date: new Date().toISOString(),
-      shark: session.shark,
-      difficulty: session.difficulty,
+      id:          Date.now(),
+      date:        new Date().toISOString(),
+      shark:       session.shark,
+      difficulty:  session.difficulty,
       fundingRound: session.fundingRound || 'seed',
-      overall: session.overall,
-      breakdown: session.breakdown,
+      overall:     session.overall,
+      breakdown:   session.breakdown,
       durationSec: session.durationSec,
       startupName: session.startupName || 'Unknown',
     }
     setSessionHistory(prev => [...prev, entry])
   }, [])
 
-  const updateConfig = useCallback((patch) =>
-    setConfig(prev => ({ ...prev, ...patch })), [])
+  // updateConfig keeps boardroomSharks and selectedSharks in sync:
+  // writing either one updates both so the rest of the app always agrees.
+  const updateConfig = useCallback((patch) => {
+    setConfig(prev => {
+      const next = { ...prev, ...patch }
+      // Sync: if boardroomSharks was explicitly set, mirror to selectedSharks
+      if (patch.boardroomSharks && !patch.selectedSharks) {
+        next.selectedSharks = patch.boardroomSharks
+      }
+      // Sync: if selectedSharks was explicitly set, mirror to boardroomSharks
+      if (patch.selectedSharks && !patch.boardroomSharks) {
+        next.boardroomSharks = patch.selectedSharks
+      }
+      return next
+    })
+  }, [])
 
   const logout = useCallback(() => {
     setUser(null)
@@ -66,10 +85,13 @@ export function AppProvider({ children }) {
   // Compute passport stats
   const passportStats = sessionHistory.length > 0 ? {
     totalSessions: sessionHistory.length,
-    avgScore: Math.round(sessionHistory.reduce((a, s) => a + s.overall, 0) / sessionHistory.length),
-    bestScore: Math.max(...sessionHistory.map(s => s.overall)),
+    avgScore:      Math.round(sessionHistory.reduce((a, s) => a + s.overall, 0) / sessionHistory.length),
+    bestScore:     Math.max(...sessionHistory.map(s => s.overall)),
     mostPracticed: (() => {
-      const counts = sessionHistory.reduce((acc, s) => { acc[s.shark] = (acc[s.shark] || 0) + 1; return acc }, {})
+      const counts = sessionHistory.reduce((acc, s) => {
+        acc[s.shark] = (acc[s.shark] || 0) + 1
+        return acc
+      }, {})
       return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || 'cuban'
     })(),
     trend: sessionHistory.length >= 2
@@ -88,7 +110,7 @@ export function AppProvider({ children }) {
       conversationId, setConversationId,
       sessionHistory, addSessionToPassport,
       passportStats,
-      transcript, setTranscript,   // ← ADDED
+      transcript, setTranscript,
     }}>
       {children}
     </Ctx.Provider>
