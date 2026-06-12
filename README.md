@@ -3,6 +3,8 @@
 # 🦈 SharkLens
 ### *Face the Sharks Before You Face the Real Ones.*
 
+[![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-SharkLens-red?style=for-the-badge)](https://shark-lens.vercel.app/)
+
 <p align="center">
   An AI-powered Investor Simulation & Pitch Intelligence Platform that helps founders practice, analyze, optimize, and perfect startup pitches through real-time investor conversations, behavioral analytics, and AI-driven feedback.
 </p>
