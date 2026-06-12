@@ -580,7 +580,7 @@ Future roadmap includes:
 
 ---
 
-# 🎤 Hackathon Pitch
+# 🎤 Overall
 
 **SharkLens is an AI-powered investor simulation platform that helps founders practice fundraising conversations before they happen.**
 
