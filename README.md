@@ -586,13 +586,6 @@ Instead of receiving static feedback, founders interact with AI investors while 
 
 The platform combines investor simulation, behavioral analytics, pitch optimization, and workflow automation into a single experience, helping founders become truly investor-ready before entering the boardroom.
 
----
-
-# 👩‍💻 Built By
-
-**Array to Heaven**
-
-Built with the belief that every founder deserves access to world-class pitch coaching—without requiring access to world-class investors.
 
 ---
 
