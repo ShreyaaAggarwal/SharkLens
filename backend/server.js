@@ -1,16 +1,21 @@
 // ============================================================
 // SharkLens Backend — Express Server
-// Handles: TruGen API proxy, webhook callbacks, MCP sims
+// Handles: TruGen API proxy, webhook callbacks, MCP sims, Claude proxy
+// Claude proxy uses Google Gemini under the hood — same frontend interface
 // ============================================================
 import 'dotenv/config'
-import express   from 'express'
-import cors      from 'cors'
+import express        from 'express'
+import cors           from 'cors'
+import { GoogleGenerativeAI } from '@google/generative-ai'
 import trugenRouter   from './routes/trugen.js'
 import webhookRouter  from './routes/webhooks.js'
 import mcpRouter      from './routes/mcp.js'
 
 const app  = express()
 const PORT = process.env.PORT || 3001
+
+// ---- Gemini client ----
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY)
 
 // ---- Middleware ----
 app.use(cors({
@@ -36,13 +41,52 @@ app.use('/api/trugen',   trugenRouter)
 app.use('/webhooks',     webhookRouter)
 app.use('/api/mcp',      mcpRouter)
 
+// ============================================================
+// Claude Analyze Proxy  (powered by Gemini — same API surface)
+// POST /api/claude/analyze
+// Body: { prompt: string, maxTokens?: number }
+// Returns: { text: string }
+// ============================================================
+app.post('/api/claude/analyze', async (req, res) => {
+  try {
+    const { prompt, maxTokens } = req.body
+
+    if (!prompt || typeof prompt !== 'string') {
+      return res.status(400).json({ error: 'prompt is required and must be a string' })
+    }
+
+    if (!process.env.GEMINI_API_KEY) {
+      return res.status(500).json({ error: 'GEMINI_API_KEY is not set on the server' })
+    }
+
+    const model = genAI.getGenerativeModel({
+      model: 'gemini-1.5-flash',          // free tier, fast, large context
+      generationConfig: {
+        maxOutputTokens: maxTokens || 4000,
+        temperature:     0.7,
+      },
+    })
+
+    const result   = await model.generateContent(prompt)
+    const response = await result.response
+    const text     = response.text()
+
+    return res.json({ text })
+
+  } catch (err) {
+    console.error('[Gemini Proxy Error]', err.message)
+    return res.status(500).json({ error: err.message || 'Gemini request failed' })
+  }
+})
+
 // ---- Health ----
 app.get('/health', (_req, res) => {
   res.json({
-    status: 'ok',
-    service: 'sharklens-backend',
-    timestamp: new Date().toISOString(),
-    trugenKey: process.env.TRUGEN_API_KEY ? '✓ SET' : '✗ MISSING',
+    status:     'ok',
+    service:    'sharklens-backend',
+    timestamp:  new Date().toISOString(),
+    trugenKey:  process.env.TRUGEN_API_KEY ? '✓ SET' : '✗ MISSING',
+    geminiKey:  process.env.GEMINI_API_KEY ? '✓ SET' : '✗ MISSING',
   })
 })
 
@@ -62,7 +106,8 @@ app.listen(PORT, () => {
   ╔══════════════════════════════════════╗
   ║   🦈  SharkLens Backend Running      ║
   ║   Port: ${PORT}                          ║
-  ║   TruGen Key: ${process.env.TRUGEN_API_KEY ? '✓ SET' : '✗ MISSING'}              ║
+  ║   TruGen Key:  ${process.env.TRUGEN_API_KEY ? '✓ SET' : '✗ MISSING'}            ║
+  ║   Gemini Key:  ${process.env.GEMINI_API_KEY ? '✓ SET' : '✗ MISSING'}            ║
   ╚══════════════════════════════════════╝
   `)
 })
