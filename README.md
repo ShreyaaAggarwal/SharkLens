@@ -93,9 +93,9 @@ The platform enables founders to practice against different investor personaliti
 
 ---
 
-# ✨ Core Features
+#  Core Features
 
-## 🎙 AI Investor Simulation
+##  AI Investor Simulation
 
 Practice against multiple AI investors with distinct personalities and questioning styles.
 
