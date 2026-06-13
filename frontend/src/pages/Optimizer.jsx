@@ -5,7 +5,7 @@ import { useApp } from '../context/AppContext'
 const BACKEND      = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 const CLAUDE_PROXY = `${BACKEND}/api/claude/analyze`
 
-async function askClaude(prompt, maxTokens = 1200) {
+async function askClaude(prompt, maxTokens = 2000) {
   const r = await fetch(CLAUDE_PROXY, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -22,11 +22,9 @@ function extractJSON(raw) {
   const start = clean.indexOf('{')
   const end   = clean.lastIndexOf('}')
   if (start === -1 || end === -1) throw new Error('No JSON object found')
-  clean = clean.slice(start, end + 1)
-  return JSON.parse(clean)
+  return JSON.parse(clean.slice(start, end + 1))
 }
 
-// ADD: Pitch Focus options
 const PITCH_FOCUS_OPTIONS = [
   {
     id:       'product',
@@ -35,7 +33,11 @@ const PITCH_FOCUS_OPTIONS = [
     sub:      'Innovation & differentiation',
     color:    '#8B5CF6',
     emphasis: ['product innovation', 'problem solved', 'technology advantage', 'differentiation', 'user value'],
-    prompt:   'Emphasize product innovation, what makes the technology unique, and the depth of the problem being solved. Remove financial projections from the opening. Lead with the breakthrough.',
+    prompt:   `You are rewriting this pitch for an investor who primarily cares about PRODUCT and TECHNOLOGY.
+Lead with the breakthrough insight behind the product. Explain the problem with visceral detail, then reveal the solution as an elegant "of course" moment.
+Emphasize: why this specific technology approach wins, what makes the product defensible, why users genuinely need this.
+Remove or minimize financial figures from the opening. The product story IS the argument.
+Write in a natural, confident speaking voice — as if the founder is in the room with investors.`,
   },
   {
     id:       'growth',
@@ -44,7 +46,11 @@ const PITCH_FOCUS_OPTIONS = [
     sub:      'Traction & scale story',
     color:    '#2ECC71',
     emphasis: ['user acquisition', 'traction metrics', 'expansion strategy', 'scalability', 'growth rate'],
-    prompt:   'Lead with traction numbers and growth trajectory. Emphasize month-over-month growth, expansion plans, and network effects. Make scalability the central argument.',
+    prompt:   `You are rewriting this pitch for an investor who primarily cares about GROWTH and TRACTION.
+Open with the growth numbers — make the trajectory undeniable in the first 30 seconds.
+Emphasize: month-over-month growth rates, network effects, viral or organic acquisition, expansion playbook, why this scales.
+Every claim should connect to a number or a proven repeatable motion.
+Write in a natural, confident speaking voice — as if the founder is in the room with investors.`,
   },
   {
     id:       'revenue',
@@ -53,7 +59,11 @@ const PITCH_FOCUS_OPTIONS = [
     sub:      'Monetization & unit economics',
     color:    '#F59E0B',
     emphasis: ['business model', 'revenue streams', 'unit economics', 'profitability path', 'LTV/CAC'],
-    prompt:   'Prioritize monetization clarity, revenue model, and path to profitability. Every sentence should connect to financial value. Remove unnecessary storytelling.',
+    prompt:   `You are rewriting this pitch for an investor who primarily cares about REVENUE MODEL and UNIT ECONOMICS.
+Open with proof of monetization — real paying customers, real numbers. Make the business model crystal clear within 60 seconds.
+Emphasize: revenue streams, pricing rationale, CAC/LTV dynamics, path to profitability, financial scalability.
+Every paragraph should connect product to money. Remove fluff about vision if it doesn't tie to financial outcomes.
+Write in a natural, confident speaking voice — as if the founder is in the room with investors.`,
   },
   {
     id:       'market',
@@ -62,7 +72,11 @@ const PITCH_FOCUS_OPTIONS = [
     sub:      'TAM, timing & competition',
     color:    '#06B6D4',
     emphasis: ['TAM/SAM/SOM', 'market opportunity', 'competitive landscape', 'market timing', 'industry tailwinds'],
-    prompt:   'Frame everything around market opportunity and why NOW is the right time. Lead with the market size and why existing solutions are failing. Position the company as the obvious winner in this space.',
+    prompt:   `You are rewriting this pitch for an investor who primarily cares about MARKET SIZE and TIMING.
+Open with the market failure — why the status quo is broken and why now is the exact right moment.
+Emphasize: TAM/SAM breakdown with bottom-up logic, why existing solutions are failing, industry tailwinds, why this team in this market now.
+Position the company as the obvious winner in a market that is about to explode.
+Write in a natural, confident speaking voice — as if the founder is in the room with investors.`,
   },
 ]
 
@@ -78,16 +92,13 @@ export default function Optimizer() {
 
   const [activeTab, setActiveTab]           = useState('rewrite')
   const [mcpDone, setMcpDone]               = useState({})
-  const [barsReady, setBarsReady]           = useState(false)
   const [rewriteLoading, setRewriteLoading] = useState(false)
   const [rewriteData, setRewriteData]       = useState(null)
   const [scriptData, setScriptData]         = useState(null)
   const [scoreAnalysis, setScoreAnalysis]   = useState(null)
-
-  // ADD: Pitch focus state
   const [pitchFocus, setPitchFocus]         = useState('product')
   const [focusLoading, setFocusLoading]     = useState(false)
-  const [focusResult, setFocusResult]       = useState(null)  // { before, after, note }[]
+  const [focusResult, setFocusResult]       = useState(null)
 
   const data = sessionData || {
     overall: 71,
@@ -105,8 +116,28 @@ export default function Optimizer() {
 
   const worst = [...data.breakdown].sort((a, b) => a.pct - b.pct)[0]
 
+  // Build shared context string — used by all prompts
+  function buildDeckContext() {
+    if (!deckIntelligence) return deckText ? deckText.slice(0, 3000) : 'No deck provided.'
+    return `Startup: ${deckIntelligence.startupName}
+Sector: ${deckIntelligence.sector}
+Problem: ${deckIntelligence.problemStatement}
+Solution: ${deckIntelligence.solution}
+Market: ${deckIntelligence.marketSize}
+Business Model: ${deckIntelligence.businessModel}
+Traction: ${deckIntelligence.traction}
+Team: ${deckIntelligence.teamHighlight || 'Not stated'}
+Ask: ${deckIntelligence.ask}
+Detected weaknesses: ${(deckIntelligence.topWeaknesses || []).join(', ')}`
+  }
+
+  function buildTranscriptContext() {
+    if (!transcript || transcript.trim().length < 20) return null
+    return `FOUNDER PITCH TRANSCRIPT (what they actually said during the session):\n${transcript.slice(0, 3000)}`
+  }
+
   useEffect(() => {
-    const t = setTimeout(() => setBarsReady(true), 300)
+    const t = setTimeout(() => {}, 300)
     MCP_ACTIONS.forEach((a, i) => {
       setTimeout(() => setMcpDone(prev => ({ ...prev, [a.id]: true })), 1200 + i * 900)
     })
@@ -127,155 +158,181 @@ export default function Optimizer() {
     }
   }, [])
 
+  // ── AI REWRITE TAB ─────────────────────────────────────────
   async function generateRewrite() {
     setRewriteLoading(true)
     try {
-      const deckContext = deckIntelligence
-        ? `Startup: ${deckIntelligence.startupName}
-Sector: ${deckIntelligence.sector}
-Problem: ${deckIntelligence.problemStatement}
-Solution: ${deckIntelligence.solution}
-Market: ${deckIntelligence.marketSize}
-Business Model: ${deckIntelligence.businessModel}
-Traction: ${deckIntelligence.traction}
-Ask: ${deckIntelligence.ask}
-Detected weaknesses: ${(deckIntelligence.topWeaknesses || []).join(', ')}`
-        : (deckText ? deckText.slice(0, 2000) : 'No deck provided')
-
-      const sessionContext = `
-Session Performance:
+      const deckCtx       = buildDeckContext()
+      const transcriptCtx = buildTranscriptContext()
+      const sessionCtx    = `Session Performance:
 - Overall score: ${data.overall}/100
 - Weakest area: ${worst.label} (${worst.pct}%)
 - Shark: ${data.shark} / Difficulty: ${data.difficulty}
 - Breakdown: ${data.breakdown.map(b => `${b.label}: ${b.pct}%`).join(', ')}`
 
-      const prompt = `You are a world-class pitch coach for first-time/student founders. Based on the deck intelligence and session performance data below, suggest concrete improvements to how this founder should phrase key parts of their pitch.
+      const prompt = `You are a world-class pitch coach. Based on the deck intelligence and session data, suggest concrete pitch improvements.
 
-IMPORTANT: Do NOT invent or fabricate quotes from the founder. You do not have a transcript. Instead, based on what the deck says, write:
-- "current": what the deck currently communicates or how founders typically phrase this weakness
-- "suggested": a stronger, investor-ready version they should say out loud
-- "note": why this phrasing works better, in simple words
+IMPORTANT: Do NOT invent or fabricate quotes. Based on what the deck says:
+- "current": how this weakness is typically or weakly communicated based on the deck data
+- "suggested": a stronger investor-ready version specific to THIS startup's content
+- "note": why this phrasing works better, in 1-2 plain sentences
 
 DECK INTELLIGENCE:
-${deckContext}
+${deckCtx}
 
-${sessionContext}
+${transcriptCtx ? transcriptCtx + '\n' : ''}
+${sessionCtx}
 
 Return ONLY valid JSON (no markdown fences):
 {
   "improvements": [
     {
-      "area": "area name (e.g. Opening Hook, Market Claim, Traction Story)",
-      "current": "how this is typically (or weakly) communicated based on the deck data",
-      "suggested": "the stronger version they should say — specific to THEIR deck content",
-      "note": "why this is better, in 1-2 simple sentences",
+      "area": "section name",
+      "current": "how this is weakly communicated based on the deck",
+      "suggested": "stronger version specific to their deck content — 2-4 sentences",
+      "note": "why this version wins with investors",
       "pct": 82
     }
   ],
   "fullScript": [
-    {"section": "HOOK (0:00-0:30)", "text": "optimized hook text based on their actual deck", "color": "#E50914"},
-    {"section": "PROBLEM (0:30-1:30)", "text": "optimized problem statement based on their actual deck", "color": "#F39C12"},
-    {"section": "SOLUTION (1:30-2:30)", "text": "optimized solution based on their actual deck", "color": "#2ECC71"},
-    {"section": "TRACTION (2:30-3:30)", "text": "optimized traction narrative based on their actual deck", "color": "#2ECC71"},
-    {"section": "THE ASK (3:30-4:00)", "text": "optimized ask based on their actual deck", "color": "#E50914"}
+    {"section": "HOOK (0:00-0:30)",      "text": "full hook paragraph — 3-5 sentences based on actual deck", "color": "#E50914"},
+    {"section": "PROBLEM (0:30-1:30)",   "text": "full problem paragraph — 3-5 sentences", "color": "#F39C12"},
+    {"section": "SOLUTION (1:30-2:30)",  "text": "full solution paragraph — 3-5 sentences", "color": "#2ECC71"},
+    {"section": "TRACTION (2:30-3:30)",  "text": "full traction paragraph — 3-5 sentences", "color": "#2ECC71"},
+    {"section": "THE ASK (3:30-4:00)",   "text": "full ask paragraph — 2-3 sentences", "color": "#E50914"}
   ],
-  "topInsight": "The single most important thing to fix, in simple words — specific to this deck",
-  "nextSessionFocus": "What to specifically practice next time, in simple words"
+  "topInsight": "The single most important fix, specific to this deck",
+  "nextSessionFocus": "What to practice next time, in plain words"
 }`
 
-      const raw    = await askClaude(prompt, 1200)
+      const raw    = await askClaude(prompt, 2000)
       const parsed = extractJSON(raw)
       setRewriteData(parsed.improvements || [])
       setScriptData(parsed.fullScript || [])
       setScoreAnalysis({ topInsight: parsed.topInsight, nextSessionFocus: parsed.nextSessionFocus })
     } catch (err) {
-      console.error('Rewrite generation failed:', err)
+      console.error('Rewrite failed:', err)
+      const sn = deckIntelligence?.startupName || 'your startup'
       setRewriteData([
         {
           area:      'Opening Hook',
-          current:   `The deck leads with the solution before establishing why the problem is urgent.`,
-          suggested: `"Every day, [specific user] loses [specific cost/time] because [core problem]. We built ${deckIntelligence?.startupName || 'this'} to fix exactly that — and we already have traction."`,
+          current:   'The deck leads with the solution before establishing why the problem is urgent.',
+          suggested: `"Every day, our target user loses time and money to [core problem]. We built ${sn} to fix exactly that — and we already have early traction to prove it works."`,
           note:      'Open with the pain, not the product. Investors fund problems, not features.',
           pct:       85,
         },
         {
           area:      'Market Claim',
           current:   `Market size stated as "${deckIntelligence?.marketSize || 'a large number'}" without a bottom-up breakdown.`,
-          suggested: `"We're targeting [specific segment] — that's [number] customers at [price point], giving us a reachable market of [₹X]. Here's how we get the first 1,000."`,
+          suggested: `"We're targeting [specific segment] — that's [N] customers at [₹price], giving us a reachable market of [₹X]. We get to the first 1,000 through [channel]."`,
           note:      'Sharks trust bottom-up math more than top-down TAM claims.',
           pct:       78,
         },
         {
           area:      'Traction Story',
-          current:   `Traction section says: "${deckIntelligence?.traction || 'Not stated'}" — needs a narrative arc.`,
-          suggested: `"In [timeframe], we went from [starting point] to [current milestone]. Our [key metric] is growing [X]% month-on-month."`,
-          note:      'Show the trajectory, not just the number. Growth rate is more convincing than absolute figures.',
+          current:   `Traction listed as "${deckIntelligence?.traction || 'Not stated'}" without a narrative arc.`,
+          suggested: `"In [timeframe] we went from [0] to [milestone]. Our [key metric] is growing [X]% month-on-month, and [retention/repeat stat] shows users keep coming back."`,
+          note:      'Show the trajectory. Growth rate is more convincing than any single number.',
           pct:       71,
         },
       ])
       setScriptData([])
       setScoreAnalysis({
-        topInsight:       `Your ${worst.label} section scored ${worst.pct}% — the deck's content here needs to be translated into clearer spoken language.`,
-        nextSessionFocus: `Practice defending your ${worst.label} with 2-3 specific numbers. Don't use vague language like "a lot" or "significant".`,
+        topInsight:       `Your ${worst.label} section scored ${worst.pct}% — translate the deck's content into clearer spoken language with specific numbers.`,
+        nextSessionFocus: `Practice defending your ${worst.label} with 2-3 concrete data points. Never say "a lot" or "significant".`,
       })
     } finally {
       setRewriteLoading(false)
     }
   }
 
-  // ADD: Generate focus-specific before/after
+  // ── PITCH FOCUS TAB — full multi-paragraph script ──────────
   async function generateFocusedPitch(focusId) {
     const focus = PITCH_FOCUS_OPTIONS.find(f => f.id === focusId)
     if (!focus) return
     setFocusLoading(true)
     setFocusResult(null)
+
     try {
-      const deckContext = deckIntelligence
-        ? `Startup: ${deckIntelligence.startupName} | Sector: ${deckIntelligence.sector} | Problem: ${deckIntelligence.problemStatement} | Solution: ${deckIntelligence.solution} | Market: ${deckIntelligence.marketSize} | Traction: ${deckIntelligence.traction} | Business Model: ${deckIntelligence.businessModel}`
-        : 'No deck provided — use a generic startup example'
+      const deckCtx       = buildDeckContext()
+      const transcriptCtx = buildTranscriptContext()
 
-      const prompt = `You are an expert VC pitch coach.
+      const prompt = `You are an expert VC pitch coach and speechwriter.
 
-Deck context:
-${deckContext}
+You have access to:
+
+1. FOUNDER PITCH DECK:
+${deckCtx}
+
+${transcriptCtx ? `2. ${transcriptCtx}\n` : '2. No transcript available — work from deck content.\n'}
+
+INVESTOR FOCUS: ${focus.label.toUpperCase()}
 
 ${focus.prompt}
 
-For each of 3 key pitch sections, show:
-- "before": a weak/typical way this section is usually delivered
-- "after": a powerful rewrite specifically for a ${focus.label} investor
-- "section": name of the section (e.g. "Opening Hook", "Market Claim", "The Ask")
-- "note": one-line tip on why this version works
+YOUR TASK:
+Analyze both sources completely. Then rewrite the pitch as a complete, professional investor presentation speech.
 
-Return ONLY valid JSON (no markdown fences):
+The output must sound like the founder is speaking DIRECTLY to investors in the room.
+
+Requirements:
+- Natural, confident speaking tone
+- Clear storytelling with a beginning, middle, end
+- Specific numbers and claims from the deck (do not invent numbers not in the deck)
+- 3 to 5 minutes of speaking content (approximately 450-750 words)
+- Written in paragraphs, NOT bullet points
+- Each section flows naturally into the next
+
+Structure the script as these 5 sections (write each as a full paragraph of 3-6 sentences):
+
+HOOK — grab attention immediately, establish stakes
+PROBLEM — make the pain visceral and real
+SOLUTION — reveal the product as the elegant answer
+TRACTION — prove it is working with specific evidence
+THE ASK — close with clarity and confidence
+
+After the full script, provide:
+- keyMessage: the single anchor sentence for this ${focus.label} investor (1 sentence)
+- improvements: 3 specific things you changed and why (each 1-2 sentences)
+
+Return ONLY valid JSON (no markdown fences, no preamble):
 {
-  "focusTitle": "${focus.label} Pitch Version",
-  "keyMessage": "The single sentence that should anchor this entire pitch for a ${focus.label} investor",
-  "sections": [
-    {
-      "section": "section name",
-      "before": "weak typical delivery (1-2 sentences)",
-      "after": "powerful rewrite specific to this deck and focus (1-3 sentences)",
-      "note": "why this version wins"
-    }
+  "focusTitle": "${focus.label} Pitch Script",
+  "keyMessage": "The single sentence that anchors everything for a ${focus.label} investor",
+  "script": {
+    "hook":     "Full HOOK paragraph — 3-6 natural speaking sentences",
+    "problem":  "Full PROBLEM paragraph — 3-6 natural speaking sentences",
+    "solution": "Full SOLUTION paragraph — 3-6 natural speaking sentences",
+    "traction": "Full TRACTION paragraph — 3-6 natural speaking sentences",
+    "ask":      "Full ASK paragraph — 3-5 natural speaking sentences"
+  },
+  "improvements": [
+    {"what": "what changed", "why": "why this makes it stronger for a ${focus.label} investor"},
+    {"what": "what changed", "why": "why this makes it stronger"},
+    {"what": "what changed", "why": "why this makes it stronger"}
   ]
 }`
 
-      const raw    = await askClaude(prompt, 900)
+      const raw    = await askClaude(prompt, 3000)
       const parsed = extractJSON(raw)
       setFocusResult(parsed)
-    } catch {
-      // Fallback
+    } catch (err) {
+      console.error('Focus pitch failed:', err)
+      const sn = deckIntelligence?.startupName || 'our startup'
       setFocusResult({
-        focusTitle:  `${focus.label} Version`,
-        keyMessage:  `Lead with what matters most to a ${focus.label.toLowerCase()} investor.`,
-        sections: [
-          {
-            section: 'Opening Hook',
-            before:  `"So basically we're like a platform that helps founders practice pitches..."`,
-            after:   `"${focus.id === 'revenue' ? 'We charge ₹2,999/month and already have 47 paying customers — that\'s ₹14L ARR in 3 months.' : focus.id === 'growth' ? 'We went from 0 to 847 users in 8 weeks — 40% week-over-week growth with zero paid acquisition.' : focus.id === 'market' ? 'India has 80,000 funded startups. Every single one needs investor practice. That\'s a ₹2,400 crore market and it\'s completely unserved.' : 'We built a real-time AI that catches your filler words mid-pitch — something no human coach can do at scale.'}"`,
-            note:    `Start with what this investor type responds to immediately.`,
-          },
+        focusTitle:   `${focus.label} Pitch Script`,
+        keyMessage:   `Lead with what matters most to a ${focus.label.toLowerCase()} investor.`,
+        script: {
+          hook:     `Every founder in this room has seen the same pitch problem: too much deck, too little clarity. ${sn} changes that. We built an AI-powered pitch simulation platform that gives founders real investor pressure before they walk into the real room. And it is working.`,
+          problem:  `Eighty thousand funded startups in India alone — and most founders still walk into investor meetings underprepared. Pitch coaches are expensive and unavailable at 2am before a big meeting. There is no feedback loop. Founders practice on friends, not sharks.`,
+          solution: `${sn} puts a real AI investor in the room with you, right now, for free. Our platform simulates six distinct investor personalities — from Mark Cuban's margin obsession to Nikhil Kamath's contrarian philosophy — and gives you real-time ML scoring on confidence, filler density, and financial clarity.`,
+          traction: `We launched eight weeks ago. We have early users and the feedback is clear: founders who practice on ${sn} walk into real meetings measurably more prepared. Our session completion rate is above seventy percent, which tells us people are not just trying it — they are finishing the full pitch.`,
+          ask:      `We are raising to scale the platform, expand the AI shark roster, and bring this to every founder accelerator in India. The ask is [₹X] for [Y]% equity. We know exactly what we will do with it, and we know exactly what success looks like in twelve months.`,
+        },
+        improvements: [
+          { what: 'Opened with a market reality, not a product description', why: `${focus.label} investors need to see the problem before the solution` },
+          { what: 'Added specific proof points and completion rate', why: 'Numbers replace claims — credibility is built on data, not assertions' },
+          { what: 'Closed with a clear ask and 12-month vision', why: 'Investors need to know exactly what they are funding and what they get back' },
         ],
       })
     } finally {
@@ -283,14 +340,12 @@ Return ONLY valid JSON (no markdown fences):
     }
   }
 
-  // Trigger when focus changes (if we're on focus tab)
   useEffect(() => {
-    if (activeTab === 'focus') {
-      generateFocusedPitch(pitchFocus)
-    }
+    if (activeTab === 'focus') generateFocusedPitch(pitchFocus)
   }, [pitchFocus, activeTab])
 
   function downloadScript() {
+    const focus = PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)
     const lines = [
       'SHARKLENS — AI OPTIMISED PITCH SCRIPT',
       `Generated: ${new Date().toLocaleString()}`,
@@ -298,41 +353,64 @@ Return ONLY valid JSON (no markdown fences):
       `Shark: ${data.shark?.toUpperCase()} | Score: ${data.overall}/100`,
       '='.repeat(50), '',
     ]
-    if (scriptData?.length) {
+
+    if (focusResult?.script && activeTab === 'focus') {
+      lines.push(`INVESTOR FOCUS: ${focusResult.focusTitle?.toUpperCase()}`)
+      lines.push(`KEY MESSAGE: "${focusResult.keyMessage}"`)
+      lines.push('')
+      const sectionLabels = { hook: 'HOOK (0:00-0:30)', problem: 'PROBLEM (0:30-1:30)', solution: 'SOLUTION (1:30-2:30)', traction: 'TRACTION (2:30-3:30)', ask: 'THE ASK (3:30-4:00)' }
+      Object.entries(focusResult.script).forEach(([k, v]) => {
+        lines.push(`--- ${sectionLabels[k] || k.toUpperCase()} ---`)
+        lines.push(v)
+        lines.push('')
+      })
+      if (focusResult.improvements?.length) {
+        lines.push('--- KEY IMPROVEMENTS ---')
+        focusResult.improvements.forEach(imp => lines.push(`• ${imp.what}: ${imp.why}`))
+      }
+    } else if (scriptData?.length) {
       scriptData.forEach(s => {
         lines.push(`--- ${s.section} ---`)
         lines.push(s.text)
         lines.push('')
       })
     }
-    if (scoreAnalysis) {
+
+    if (scoreAnalysis && activeTab !== 'focus') {
       lines.push('--- KEY INSIGHT ---')
       lines.push(scoreAnalysis.topInsight || '')
       lines.push('')
       lines.push('--- NEXT SESSION FOCUS ---')
       lines.push(scoreAnalysis.nextSessionFocus || '')
     }
+
     const a = document.createElement('a')
     a.href = URL.createObjectURL(new Blob([lines.join('\n')], { type: 'text/plain' }))
-    a.download = `sharklens-optimised-${deckIntelligence?.startupName || 'pitch'}.txt`
+    a.download = `sharklens-${focusResult && activeTab === 'focus' ? pitchFocus : 'optimised'}-${deckIntelligence?.startupName || 'pitch'}.txt`
     a.click()
   }
+
+  const activeFocusOpt = PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)
 
   return (
     <div className="pt-nav" style={{ minHeight: '100vh' }}>
       <style>{`
         @keyframes focusCardIn {
-          from { opacity: 0; transform: translateY(12px); }
+          from { opacity: 0; transform: translateY(10px); }
           to   { opacity: 1; transform: translateY(0); }
         }
-        @keyframes beforeAfterSlide {
-          from { opacity: 0; transform: translateX(-8px); }
-          to   { opacity: 1; transform: translateX(0); }
+        .script-section {
+          margin-bottom: 28px;
+          padding-bottom: 28px;
+          border-bottom: 1px solid var(--border);
+          animation: focusCardIn 0.35s ease both;
         }
+        .script-section:last-of-type { border-bottom: none; }
       `}</style>
 
       <div className="wrap" style={{ paddingTop: 52, paddingBottom: 80 }}>
 
+        {/* Header */}
         <div className="fu" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 40, flexWrap: 'wrap', gap: 16 }}>
           <div>
             <div className="eyebrow" style={{ marginBottom: 12 }}>Step 05 · AI Optimization Engine</div>
@@ -361,14 +439,9 @@ Return ONLY valid JSON (no markdown fences):
           </div>
         )}
 
-        {/* Tabs — ADD: pitch focus tab */}
+        {/* Tabs */}
         <div className="fu1" style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 28, overflowX: 'auto' }}>
-          {[
-            ['rewrite', 'AI REWRITE'],
-            ['focus',   '🎯 PITCH FOCUS'],
-            ['script',  'FULL SCRIPT'],
-            ['mcp',     'MCP AUTOMATION'],
-          ].map(([id, label]) => (
+          {[['rewrite', 'AI REWRITE'], ['focus', '🎯 PITCH FOCUS'], ['script', 'FULL SCRIPT'], ['mcp', 'MCP AUTOMATION']].map(([id, label]) => (
             <button key={id} onClick={() => setActiveTab(id)} style={{
               padding: '10px 20px', border: 'none', background: 'transparent',
               fontFamily: 'var(--f-display)', fontSize: 14, letterSpacing: .5, cursor: 'pointer',
@@ -379,20 +452,15 @@ Return ONLY valid JSON (no markdown fences):
           ))}
         </div>
 
-        {/* ADD: PITCH FOCUS TAB */}
+        {/* ── PITCH FOCUS TAB ── */}
         {activeTab === 'focus' && (
           <div className="fu2">
-            <div style={{
-              fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--dim)',
-              marginBottom: 20, letterSpacing: 1,
-            }}>
-              DIFFERENT INVESTORS CARE ABOUT DIFFERENT THINGS — SELECT A FOCUS TO REWRITE YOUR PITCH ACCORDINGLY
+            <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--dim)', marginBottom: 20, letterSpacing: 1 }}>
+              DIFFERENT INVESTORS CARE ABOUT DIFFERENT THINGS — SELECT A FOCUS TO GET A COMPLETE REWRITTEN PITCH SCRIPT
             </div>
 
-            {/* Focus selector cards */}
-            <div style={{
-              display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 28,
-            }}>
+            {/* Focus selector */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 28 }}>
               {PITCH_FOCUS_OPTIONS.map(opt => (
                 <div
                   key={opt.id}
@@ -409,20 +477,10 @@ Return ONLY valid JSON (no markdown fences):
                   <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
                     <span style={{ fontSize: 20 }}>{opt.icon}</span>
                     <div>
-                      <div style={{
-                        fontFamily: 'var(--f-display)', fontSize: 15, letterSpacing: 0.5,
-                        color: pitchFocus === opt.id ? opt.color : 'var(--text)',
-                        transition: 'color 0.2s',
-                      }}>{opt.label}</div>
+                      <div style={{ fontFamily: 'var(--f-display)', fontSize: 15, letterSpacing: 0.5, color: pitchFocus === opt.id ? opt.color : 'var(--text)', transition: 'color 0.2s' }}>{opt.label}</div>
                       <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--dim)' }}>{opt.sub}</div>
                     </div>
-                    {pitchFocus === opt.id && (
-                      <div style={{
-                        marginLeft: 'auto',
-                        width: 8, height: 8, borderRadius: '50%',
-                        background: opt.color, flexShrink: 0,
-                      }} />
-                    )}
+                    {pitchFocus === opt.id && <div style={{ marginLeft: 'auto', width: 8, height: 8, borderRadius: '50%', background: opt.color, flexShrink: 0 }} />}
                   </div>
                   <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
                     {opt.emphasis.map(e => (
@@ -430,8 +488,7 @@ Return ONLY valid JSON (no markdown fences):
                         fontFamily: 'var(--f-mono)', fontSize: 9,
                         background: pitchFocus === opt.id ? `${opt.color}20` : 'var(--surface2)',
                         color: pitchFocus === opt.id ? opt.color : 'var(--dim)',
-                        padding: '2px 8px', borderRadius: 10,
-                        transition: 'all 0.2s',
+                        padding: '2px 8px', borderRadius: 10, transition: 'all 0.2s',
                       }}>{e}</span>
                     ))}
                   </div>
@@ -439,102 +496,117 @@ Return ONLY valid JSON (no markdown fences):
               ))}
             </div>
 
-            {/* Focus result: Before / After */}
+            {/* Loading */}
             {focusLoading && (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '40px 0', color: 'var(--sub)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '48px 0', color: 'var(--sub)' }}>
                 <span className="spin-ring" />
-                <span style={{ fontFamily: 'var(--f-mono)', fontSize: 12 }}>
-                  REWRITING FOR {PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)?.label.toUpperCase()}...
-                </span>
+                <div>
+                  <div style={{ fontFamily: 'var(--f-mono)', fontSize: 12 }}>
+                    WRITING FULL {activeFocusOpt?.label.toUpperCase()} SCRIPT...
+                  </div>
+                  <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--dim)', marginTop: 4 }}>
+                    Generating 3-5 minute investor speech based on your deck
+                  </div>
+                </div>
               </div>
             )}
 
+            {/* Full script result */}
             {focusResult && !focusLoading && (
               <div style={{ animation: 'focusCardIn 0.4s ease' }}>
+
                 {/* Key message banner */}
                 {focusResult.keyMessage && (
                   <div style={{
-                    background: `${PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)?.color}10`,
-                    border: `1px solid ${PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)?.color}44`,
-                    borderRadius: 'var(--r-lg)', padding: '14px 18px', marginBottom: 20,
+                    background: `${activeFocusOpt?.color}10`,
+                    border: `1px solid ${activeFocusOpt?.color}44`,
+                    borderRadius: 'var(--r-lg)', padding: '16px 20px', marginBottom: 24,
                     display: 'flex', gap: 12, alignItems: 'flex-start',
                   }}>
-                    <span style={{ fontSize: 16 }}>🎯</span>
+                    <span style={{ fontSize: 18, flexShrink: 0 }}>🎯</span>
                     <div>
-                      <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)?.color, letterSpacing: 2, marginBottom: 4 }}>
-                        KEY MESSAGE FOR {focusResult.focusTitle?.toUpperCase()}
+                      <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: activeFocusOpt?.color, letterSpacing: 2, marginBottom: 5 }}>
+                        ANCHOR MESSAGE · {focusResult.focusTitle?.toUpperCase()}
                       </div>
-                      <div style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.55, fontStyle: 'italic' }}>
+                      <div style={{ fontSize: 15, color: 'var(--text)', lineHeight: 1.55, fontStyle: 'italic', fontWeight: 400 }}>
                         "{focusResult.keyMessage}"
                       </div>
                     </div>
                   </div>
                 )}
 
-                {/* Before / After sections */}
-                {(focusResult.sections || []).map((s, i) => (
-                  <div key={i} className="card" style={{ marginBottom: 14, animation: `beforeAfterSlide 0.4s ease ${i * 0.1}s both` }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                      <div style={{ fontFamily: 'var(--f-display)', fontSize: 16, letterSpacing: 0.5 }}>{s.section}</div>
+                {/* Full pitch script — paragraph view */}
+                {focusResult.script && (
+                  <div className="card" style={{ marginBottom: 20 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                      <div>
+                        <div className="card-lbl">AI OPTIMISED PITCH SCRIPT</div>
+                        <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--dim)', marginTop: 2 }}>
+                          Investor Focus: {focusResult.focusTitle} · ~4 min speaking time
+                        </div>
+                      </div>
+                      <button className="btn btn-outline" onClick={downloadScript} style={{ fontSize: 11, padding: '6px 14px' }}>
+                        ↓ DOWNLOAD
+                      </button>
                     </div>
 
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
-                      {/* BEFORE */}
-                      <div style={{
-                        background: 'rgba(229,9,20,0.04)',
-                        border: '1px solid rgba(229,9,20,0.15)',
-                        borderLeft: '3px solid rgba(229,9,20,0.5)',
-                        borderRadius: 'var(--r)', padding: '14px 16px',
-                      }}>
-                        <div style={{
-                          fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--cuban)',
-                          letterSpacing: 2, marginBottom: 8,
-                          display: 'flex', alignItems: 'center', gap: 5,
-                        }}>
-                          ✗ BEFORE
+                    {[
+                      { key: 'hook',     label: 'HOOK',     time: '0:00–0:30',  color: '#E50914' },
+                      { key: 'problem',  label: 'PROBLEM',  time: '0:30–1:30',  color: '#F59E0B' },
+                      { key: 'solution', label: 'SOLUTION', time: '1:30–2:30',  color: activeFocusOpt?.color || '#2ECC71' },
+                      { key: 'traction', label: 'TRACTION', time: '2:30–3:30',  color: '#2ECC71' },
+                      { key: 'ask',      label: 'THE ASK',  time: '3:30–4:00',  color: '#E50914' },
+                    ].map((sec, i) => focusResult.script[sec.key] ? (
+                      <div key={sec.key} className="script-section" style={{ animationDelay: `${i * 0.07}s` }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+                          <div style={{
+                            fontFamily: 'var(--f-mono)', fontSize: 9, letterSpacing: 2,
+                            color: sec.color, background: `${sec.color}14`,
+                            border: `1px solid ${sec.color}44`,
+                            padding: '3px 10px', borderRadius: 20,
+                          }}>
+                            {sec.label}
+                          </div>
+                          <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--dim)' }}>{sec.time}</div>
                         </div>
-                        <div style={{ fontSize: 13, color: 'var(--sub)', lineHeight: 1.65, fontStyle: 'italic' }}>
-                          {s.before}
-                        </div>
-                      </div>
-
-                      {/* AFTER */}
-                      <div style={{
-                        background: 'rgba(46,204,113,0.04)',
-                        border: '1px solid rgba(46,204,113,0.2)',
-                        borderLeft: `3px solid ${PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)?.color || 'var(--vc)'}`,
-                        borderRadius: 'var(--r)', padding: '14px 16px',
-                      }}>
-                        <div style={{
-                          fontFamily: 'var(--f-mono)', fontSize: 9,
-                          color: PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)?.color || 'var(--vc)',
-                          letterSpacing: 2, marginBottom: 8,
-                          display: 'flex', alignItems: 'center', gap: 5,
-                        }}>
-                          ✓ AFTER ({PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)?.label.toUpperCase()})
-                        </div>
-                        <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.65, fontStyle: 'italic', fontWeight: 400 }}>
-                          {s.after}
+                        <div style={{ fontSize: 15, color: 'var(--text)', lineHeight: 1.85, fontWeight: 300 }}>
+                          {focusResult.script[sec.key]}
                         </div>
                       </div>
-                    </div>
-
-                    {s.note && (
-                      <div style={{
-                        fontFamily: 'var(--f-mono)', fontSize: 10,
-                        color: PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)?.color || 'var(--vc)',
-                      }}>
-                        💡 {s.note}
-                      </div>
-                    )}
+                    ) : null)}
                   </div>
-                ))}
+                )}
+
+                {/* Key improvements */}
+                {(focusResult.improvements || []).length > 0 && (
+                  <div className="card">
+                    <div className="card-lbl" style={{ marginBottom: 14 }}>KEY IMPROVEMENTS MADE</div>
+                    {focusResult.improvements.map((imp, i) => (
+                      <div key={i} style={{
+                        display: 'flex', gap: 12, alignItems: 'flex-start',
+                        padding: '10px 0', borderBottom: i < focusResult.improvements.length - 1 ? '1px solid var(--border)' : 'none',
+                      }}>
+                        <div style={{
+                          width: 22, height: 22, borderRadius: '50%', flexShrink: 0, marginTop: 1,
+                          background: `${activeFocusOpt?.color}20`,
+                          border: `1px solid ${activeFocusOpt?.color}44`,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontFamily: 'var(--f-mono)', fontSize: 9, color: activeFocusOpt?.color,
+                        }}>{i + 1}</div>
+                        <div>
+                          <div style={{ fontSize: 13, color: 'var(--text)', fontWeight: 500, marginBottom: 3 }}>{imp.what}</div>
+                          <div style={{ fontSize: 12, color: 'var(--dim)', lineHeight: 1.5 }}>{imp.why}</div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </div>
         )}
 
-        {/* REWRITE TAB — existing, unchanged */}
+        {/* ── AI REWRITE TAB ── */}
         {activeTab === 'rewrite' && (
           <div className="fu2">
             {rewriteLoading ? (
@@ -550,7 +622,8 @@ Return ONLY valid JSON (no markdown fences):
                   background: 'var(--surface2)', borderRadius: 'var(--r)',
                   border: '1px solid var(--border)',
                 }}>
-                  📋 Based on your deck content and session score — these are suggested phrasings to use out loud, not a transcript.
+                  📋 Based on your deck content and session score — suggested phrasings to use out loud, not a transcript.
+                  {transcript ? ' Transcript context included.' : ''}
                 </div>
 
                 {(rewriteData || []).map((item, i) => (
@@ -562,11 +635,11 @@ Return ONLY valid JSON (no markdown fences):
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                       <div style={{ background: 'var(--surface2)', borderRadius: 'var(--r)', padding: '12px 14px', borderLeft: '2px solid var(--border2)' }}>
                         <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--dim)', letterSpacing: 2, marginBottom: 6 }}>AS CURRENTLY FRAMED</div>
-                        <div style={{ fontSize: 13, color: 'var(--sub)', lineHeight: 1.6 }}>{item.current}</div>
+                        <div style={{ fontSize: 13, color: 'var(--sub)', lineHeight: 1.65 }}>{item.current}</div>
                       </div>
                       <div style={{ background: 'rgba(46,204,113,0.04)', borderRadius: 'var(--r)', padding: '12px 14px', borderLeft: '2px solid var(--vc)' }}>
                         <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--vc)', letterSpacing: 2, marginBottom: 6 }}>SAY IT LIKE THIS</div>
-                        <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.6, fontStyle: 'italic' }}>{item.suggested}</div>
+                        <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.65, fontStyle: 'italic' }}>{item.suggested}</div>
                       </div>
                     </div>
                     <div style={{ marginTop: 10, fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--vc)' }}>✓ {item.note}</div>
@@ -584,32 +657,38 @@ Return ONLY valid JSON (no markdown fences):
           </div>
         )}
 
-        {/* SCRIPT TAB — unchanged */}
+        {/* ── FULL SCRIPT TAB ── */}
         {activeTab === 'script' && (
           <div className="fu2">
             <div className="card">
-              <div className="card-lbl" style={{ marginBottom: 20 }}>
-                AI-Optimised Full Pitch Script · {deckIntelligence?.startupName || 'Your Startup'}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 20 }}>
+                <div className="card-lbl">
+                  AI-Optimised Full Pitch Script · {deckIntelligence?.startupName || 'Your Startup'}
+                </div>
+                <button className="btn btn-outline" onClick={downloadScript} style={{ fontSize: 11, padding: '6px 14px' }}>↓ DOWNLOAD</button>
               </div>
               {rewriteLoading ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '30px 0', color: 'var(--sub)' }}>
                   <span className="spin-ring" />
                   <span style={{ fontFamily: 'var(--f-mono)', fontSize: 11 }}>GENERATING SCRIPT...</span>
                 </div>
-              ) : (
-                (scriptData || []).map((s, i) => (
-                  <div key={i} style={{ marginBottom: 22, paddingBottom: 22, borderBottom: '1px solid var(--border)' }}>
-                    <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: s.color || 'var(--cuban)', letterSpacing: 2, marginBottom: 8, textTransform: 'uppercase' }}>{s.section}</div>
-                    <div style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.8, fontStyle: 'italic' }}>"{s.text}"</div>
+              ) : (scriptData || []).length > 0 ? (
+                (scriptData).map((s, i) => (
+                  <div key={i} className="script-section">
+                    <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: s.color || 'var(--cuban)', letterSpacing: 2, marginBottom: 10, textTransform: 'uppercase' }}>{s.section}</div>
+                    <div style={{ fontSize: 15, color: 'var(--text)', lineHeight: 1.85, fontWeight: 300 }}>{s.text}</div>
                   </div>
                 ))
+              ) : (
+                <div style={{ fontFamily: 'var(--f-mono)', fontSize: 11, color: 'var(--dim)', padding: '20px 0', textAlign: 'center' }}>
+                  Use the 🎯 PITCH FOCUS tab for a full investor-ready script tailored to a specific investor type.
+                </div>
               )}
-              <button className="btn btn-red" onClick={downloadScript} style={{ marginTop: 8 }}>↓ DOWNLOAD FULL SCRIPT</button>
             </div>
           </div>
         )}
 
-        {/* MCP TAB — unchanged */}
+        {/* ── MCP TAB ── */}
         {activeTab === 'mcp' && (
           <div className="fu2">
             <div className="card" style={{ marginBottom: 20 }}>
