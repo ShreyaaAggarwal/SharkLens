@@ -441,7 +441,7 @@ Return ONLY valid JSON (no markdown fences, no preamble):
 
         {/* Tabs */}
         <div className="fu1" style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 28, overflowX: 'auto' }}>
-          {[['rewrite', 'AI REWRITE'], ['focus', '🎯 PITCH FOCUS'], ['script', 'FULL SCRIPT'], ['mcp', 'MCP AUTOMATION']].map(([id, label]) => (
+          {[['rewrite', 'AI REWRITE'], ['focus', 'PITCH FOCUS'], ['script', 'FULL SCRIPT'], ['mcp', 'MCP AUTOMATION']].map(([id, label]) => (
             <button key={id} onClick={() => setActiveTab(id)} style={{
               padding: '10px 20px', border: 'none', background: 'transparent',
               fontFamily: 'var(--f-display)', fontSize: 14, letterSpacing: .5, cursor: 'pointer',
