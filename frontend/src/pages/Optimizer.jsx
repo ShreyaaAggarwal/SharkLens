@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useApp } from '../context/AppContext'
 
-const BACKEND = import.meta.env.VITE_API_URL || 'http://localhost:3001'
+const BACKEND      = import.meta.env.VITE_API_URL || 'http://localhost:3001'
 const CLAUDE_PROXY = `${BACKEND}/api/claude/analyze`
 
 async function askClaude(prompt, maxTokens = 1200) {
@@ -16,6 +16,56 @@ async function askClaude(prompt, maxTokens = 1200) {
   return data.text || ''
 }
 
+function extractJSON(raw) {
+  if (!raw) throw new Error('Empty response')
+  let clean = raw.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim()
+  const start = clean.indexOf('{')
+  const end   = clean.lastIndexOf('}')
+  if (start === -1 || end === -1) throw new Error('No JSON object found')
+  clean = clean.slice(start, end + 1)
+  return JSON.parse(clean)
+}
+
+// ADD: Pitch Focus options
+const PITCH_FOCUS_OPTIONS = [
+  {
+    id:       'product',
+    icon:     '🔬',
+    label:    'Product Focus',
+    sub:      'Innovation & differentiation',
+    color:    '#8B5CF6',
+    emphasis: ['product innovation', 'problem solved', 'technology advantage', 'differentiation', 'user value'],
+    prompt:   'Emphasize product innovation, what makes the technology unique, and the depth of the problem being solved. Remove financial projections from the opening. Lead with the breakthrough.',
+  },
+  {
+    id:       'growth',
+    icon:     '📈',
+    label:    'Growth Focus',
+    sub:      'Traction & scale story',
+    color:    '#2ECC71',
+    emphasis: ['user acquisition', 'traction metrics', 'expansion strategy', 'scalability', 'growth rate'],
+    prompt:   'Lead with traction numbers and growth trajectory. Emphasize month-over-month growth, expansion plans, and network effects. Make scalability the central argument.',
+  },
+  {
+    id:       'revenue',
+    icon:     '💰',
+    label:    'Revenue Focus',
+    sub:      'Monetization & unit economics',
+    color:    '#F59E0B',
+    emphasis: ['business model', 'revenue streams', 'unit economics', 'profitability path', 'LTV/CAC'],
+    prompt:   'Prioritize monetization clarity, revenue model, and path to profitability. Every sentence should connect to financial value. Remove unnecessary storytelling.',
+  },
+  {
+    id:       'market',
+    icon:     '🌏',
+    label:    'Market Focus',
+    sub:      'TAM, timing & competition',
+    color:    '#06B6D4',
+    emphasis: ['TAM/SAM/SOM', 'market opportunity', 'competitive landscape', 'market timing', 'industry tailwinds'],
+    prompt:   'Frame everything around market opportunity and why NOW is the right time. Lead with the market size and why existing solutions are failing. Position the company as the obvious winner in this space.',
+  },
+]
+
 const MCP_ACTIONS = [
   { id: 'gmail',    icon: '📧', label: 'Scorecard Report',    sub: 'Gmail MCP',    done: 'Sent to inbox ✓' },
   { id: 'calendar', icon: '📅', label: 'Follow-up Session',   sub: 'Calendar MCP', done: 'Booked: Thu 10 AM ✓' },
@@ -23,25 +73,30 @@ const MCP_ACTIONS = [
 ]
 
 export default function Optimizer() {
-  const { sessionData, config, deckText, deckIntelligence, addSessionToPassport } = useApp()
+  const { sessionData, config, deckText, deckIntelligence, addSessionToPassport, transcript } = useApp()
   const nav = useNavigate()
 
-  const [activeTab, setActiveTab]   = useState('rewrite')
-  const [mcpDone, setMcpDone]       = useState({})
-  const [barsReady, setBarsReady]   = useState(false)
+  const [activeTab, setActiveTab]           = useState('rewrite')
+  const [mcpDone, setMcpDone]               = useState({})
+  const [barsReady, setBarsReady]           = useState(false)
   const [rewriteLoading, setRewriteLoading] = useState(false)
-  const [rewriteData, setRewriteData] = useState(null)
-  const [scriptData, setScriptData]   = useState(null)
-  const [scoreAnalysis, setScoreAnalysis] = useState(null)
+  const [rewriteData, setRewriteData]       = useState(null)
+  const [scriptData, setScriptData]         = useState(null)
+  const [scoreAnalysis, setScoreAnalysis]   = useState(null)
+
+  // ADD: Pitch focus state
+  const [pitchFocus, setPitchFocus]         = useState('product')
+  const [focusLoading, setFocusLoading]     = useState(false)
+  const [focusResult, setFocusResult]       = useState(null)  // { before, after, note }[]
 
   const data = sessionData || {
     overall: 71,
     breakdown: [
-      { label: 'Confidence', pct: 64, color: 'var(--cuban)' },
-      { label: 'Market Sizing', pct: 72, color: 'var(--vc)' },
-      { label: 'Financials', pct: 48, color: 'var(--angel)' },
-      { label: 'Vision', pct: 80, color: 'var(--vc)' },
-      { label: 'Delivery', pct: 70, color: 'var(--sub)' },
+      { label: 'Confidence',    pct: 64, color: 'var(--cuban)' },
+      { label: 'Market Sizing', pct: 72, color: 'var(--vc)'    },
+      { label: 'Financials',    pct: 48, color: 'var(--angel)' },
+      { label: 'Vision',        pct: 80, color: 'var(--vc)'    },
+      { label: 'Delivery',      pct: 70, color: 'var(--sub)'   },
     ],
     shark: config.shark || 'cuban',
     difficulty: config.difficulty || 'Realistic',
@@ -63,11 +118,11 @@ export default function Optimizer() {
     if (sessionData) {
       addSessionToPassport({
         ...sessionData,
-        startupName: deckIntelligence?.startupName || 'Unknown',
-        sector: deckIntelligence?.sector || '',
+        startupName:  deckIntelligence?.startupName || 'Unknown',
+        sector:       deckIntelligence?.sector || '',
         fundingRound: config.fundingRound,
-        ask: deckIntelligence?.ask || '',
-        traction: deckIntelligence?.traction || '',
+        ask:          deckIntelligence?.ask || '',
+        traction:     deckIntelligence?.traction || '',
       })
     }
   }, [])
@@ -128,11 +183,8 @@ Return ONLY valid JSON (no markdown fences):
   "nextSessionFocus": "What to specifically practice next time, in simple words"
 }`
 
-      const raw = await askClaude(prompt, 1200)
-      const clean = raw.replace(/```json|```/g, '').trim()
-      const start = clean.indexOf('{')
-      const end = clean.lastIndexOf('}')
-      const parsed = JSON.parse(clean.slice(start, end + 1))
+      const raw    = await askClaude(prompt, 1200)
+      const parsed = extractJSON(raw)
       setRewriteData(parsed.improvements || [])
       setScriptData(parsed.fullScript || [])
       setScoreAnalysis({ topInsight: parsed.topInsight, nextSessionFocus: parsed.nextSessionFocus })
@@ -140,36 +192,103 @@ Return ONLY valid JSON (no markdown fences):
       console.error('Rewrite generation failed:', err)
       setRewriteData([
         {
-          area: 'Opening Hook',
-          current: `The deck leads with the solution before establishing why the problem is urgent.`,
+          area:      'Opening Hook',
+          current:   `The deck leads with the solution before establishing why the problem is urgent.`,
           suggested: `"Every day, [specific user] loses [specific cost/time] because [core problem]. We built ${deckIntelligence?.startupName || 'this'} to fix exactly that — and we already have traction."`,
-          note: 'Open with the pain, not the product. Investors fund problems, not features.',
-          pct: 85,
+          note:      'Open with the pain, not the product. Investors fund problems, not features.',
+          pct:       85,
         },
         {
-          area: 'Market Claim',
-          current: `Market size stated as "${deckIntelligence?.marketSize || 'a large number'}" without a bottom-up breakdown.`,
+          area:      'Market Claim',
+          current:   `Market size stated as "${deckIntelligence?.marketSize || 'a large number'}" without a bottom-up breakdown.`,
           suggested: `"We're targeting [specific segment] — that's [number] customers at [price point], giving us a reachable market of [₹X]. Here's how we get the first 1,000."`,
-          note: 'Sharks trust bottom-up math more than top-down TAM claims.',
-          pct: 78,
+          note:      'Sharks trust bottom-up math more than top-down TAM claims.',
+          pct:       78,
         },
         {
-          area: 'Traction Story',
-          current: `Traction section says: "${deckIntelligence?.traction || 'Not stated'}" — needs a narrative arc.`,
+          area:      'Traction Story',
+          current:   `Traction section says: "${deckIntelligence?.traction || 'Not stated'}" — needs a narrative arc.`,
           suggested: `"In [timeframe], we went from [starting point] to [current milestone]. Our [key metric] is growing [X]% month-on-month."`,
-          note: 'Show the trajectory, not just the number. Growth rate is more convincing than absolute figures.',
-          pct: 71,
+          note:      'Show the trajectory, not just the number. Growth rate is more convincing than absolute figures.',
+          pct:       71,
         },
       ])
       setScriptData([])
       setScoreAnalysis({
-        topInsight: `Your ${worst.label} section scored ${worst.pct}% — the deck's content here needs to be translated into clearer spoken language.`,
+        topInsight:       `Your ${worst.label} section scored ${worst.pct}% — the deck's content here needs to be translated into clearer spoken language.`,
         nextSessionFocus: `Practice defending your ${worst.label} with 2-3 specific numbers. Don't use vague language like "a lot" or "significant".`,
       })
     } finally {
       setRewriteLoading(false)
     }
   }
+
+  // ADD: Generate focus-specific before/after
+  async function generateFocusedPitch(focusId) {
+    const focus = PITCH_FOCUS_OPTIONS.find(f => f.id === focusId)
+    if (!focus) return
+    setFocusLoading(true)
+    setFocusResult(null)
+    try {
+      const deckContext = deckIntelligence
+        ? `Startup: ${deckIntelligence.startupName} | Sector: ${deckIntelligence.sector} | Problem: ${deckIntelligence.problemStatement} | Solution: ${deckIntelligence.solution} | Market: ${deckIntelligence.marketSize} | Traction: ${deckIntelligence.traction} | Business Model: ${deckIntelligence.businessModel}`
+        : 'No deck provided — use a generic startup example'
+
+      const prompt = `You are an expert VC pitch coach.
+
+Deck context:
+${deckContext}
+
+${focus.prompt}
+
+For each of 3 key pitch sections, show:
+- "before": a weak/typical way this section is usually delivered
+- "after": a powerful rewrite specifically for a ${focus.label} investor
+- "section": name of the section (e.g. "Opening Hook", "Market Claim", "The Ask")
+- "note": one-line tip on why this version works
+
+Return ONLY valid JSON (no markdown fences):
+{
+  "focusTitle": "${focus.label} Pitch Version",
+  "keyMessage": "The single sentence that should anchor this entire pitch for a ${focus.label} investor",
+  "sections": [
+    {
+      "section": "section name",
+      "before": "weak typical delivery (1-2 sentences)",
+      "after": "powerful rewrite specific to this deck and focus (1-3 sentences)",
+      "note": "why this version wins"
+    }
+  ]
+}`
+
+      const raw    = await askClaude(prompt, 900)
+      const parsed = extractJSON(raw)
+      setFocusResult(parsed)
+    } catch {
+      // Fallback
+      setFocusResult({
+        focusTitle:  `${focus.label} Version`,
+        keyMessage:  `Lead with what matters most to a ${focus.label.toLowerCase()} investor.`,
+        sections: [
+          {
+            section: 'Opening Hook',
+            before:  `"So basically we're like a platform that helps founders practice pitches..."`,
+            after:   `"${focus.id === 'revenue' ? 'We charge ₹2,999/month and already have 47 paying customers — that\'s ₹14L ARR in 3 months.' : focus.id === 'growth' ? 'We went from 0 to 847 users in 8 weeks — 40% week-over-week growth with zero paid acquisition.' : focus.id === 'market' ? 'India has 80,000 funded startups. Every single one needs investor practice. That\'s a ₹2,400 crore market and it\'s completely unserved.' : 'We built a real-time AI that catches your filler words mid-pitch — something no human coach can do at scale.'}"`,
+            note:    `Start with what this investor type responds to immediately.`,
+          },
+        ],
+      })
+    } finally {
+      setFocusLoading(false)
+    }
+  }
+
+  // Trigger when focus changes (if we're on focus tab)
+  useEffect(() => {
+    if (activeTab === 'focus') {
+      generateFocusedPitch(pitchFocus)
+    }
+  }, [pitchFocus, activeTab])
 
   function downloadScript() {
     const lines = [
@@ -201,6 +320,17 @@ Return ONLY valid JSON (no markdown fences):
 
   return (
     <div className="pt-nav" style={{ minHeight: '100vh' }}>
+      <style>{`
+        @keyframes focusCardIn {
+          from { opacity: 0; transform: translateY(12px); }
+          to   { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes beforeAfterSlide {
+          from { opacity: 0; transform: translateX(-8px); }
+          to   { opacity: 1; transform: translateX(0); }
+        }
+      `}</style>
+
       <div className="wrap" style={{ paddingTop: 52, paddingBottom: 80 }}>
 
         <div className="fu" style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: 40, flexWrap: 'wrap', gap: 16 }}>
@@ -231,20 +361,180 @@ Return ONLY valid JSON (no markdown fences):
           </div>
         )}
 
-        {/* Tabs */}
-        <div className="fu1" style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 28 }}>
-          {[['rewrite', 'AI REWRITE'], ['script', 'FULL SCRIPT'], ['mcp', 'MCP AUTOMATION']].map(([id, label]) => (
+        {/* Tabs — ADD: pitch focus tab */}
+        <div className="fu1" style={{ display: 'flex', borderBottom: '1px solid var(--border)', marginBottom: 28, overflowX: 'auto' }}>
+          {[
+            ['rewrite', 'AI REWRITE'],
+            ['focus',   '🎯 PITCH FOCUS'],
+            ['script',  'FULL SCRIPT'],
+            ['mcp',     'MCP AUTOMATION'],
+          ].map(([id, label]) => (
             <button key={id} onClick={() => setActiveTab(id)} style={{
               padding: '10px 20px', border: 'none', background: 'transparent',
               fontFamily: 'var(--f-display)', fontSize: 14, letterSpacing: .5, cursor: 'pointer',
               color: activeTab === id ? 'var(--text)' : 'var(--dim)',
               borderBottom: activeTab === id ? '2px solid var(--cuban)' : '2px solid transparent',
-              transition: 'all .2s',
+              transition: 'all .2s', whiteSpace: 'nowrap',
             }}>{label}</button>
           ))}
         </div>
 
-        {/* Rewrite Tab */}
+        {/* ADD: PITCH FOCUS TAB */}
+        {activeTab === 'focus' && (
+          <div className="fu2">
+            <div style={{
+              fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--dim)',
+              marginBottom: 20, letterSpacing: 1,
+            }}>
+              DIFFERENT INVESTORS CARE ABOUT DIFFERENT THINGS — SELECT A FOCUS TO REWRITE YOUR PITCH ACCORDINGLY
+            </div>
+
+            {/* Focus selector cards */}
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12, marginBottom: 28,
+            }}>
+              {PITCH_FOCUS_OPTIONS.map(opt => (
+                <div
+                  key={opt.id}
+                  onClick={() => setPitchFocus(opt.id)}
+                  style={{
+                    background: pitchFocus === opt.id ? `${opt.color}12` : 'var(--surface)',
+                    border: `1.5px solid ${pitchFocus === opt.id ? opt.color : 'var(--border)'}`,
+                    borderRadius: 'var(--r-lg)', padding: '16px 18px',
+                    cursor: 'pointer', transition: 'all 0.2s',
+                    transform: pitchFocus === opt.id ? 'translateY(-1px)' : 'none',
+                    boxShadow: pitchFocus === opt.id ? `0 4px 20px ${opt.color}22` : 'none',
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+                    <span style={{ fontSize: 20 }}>{opt.icon}</span>
+                    <div>
+                      <div style={{
+                        fontFamily: 'var(--f-display)', fontSize: 15, letterSpacing: 0.5,
+                        color: pitchFocus === opt.id ? opt.color : 'var(--text)',
+                        transition: 'color 0.2s',
+                      }}>{opt.label}</div>
+                      <div style={{ fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--dim)' }}>{opt.sub}</div>
+                    </div>
+                    {pitchFocus === opt.id && (
+                      <div style={{
+                        marginLeft: 'auto',
+                        width: 8, height: 8, borderRadius: '50%',
+                        background: opt.color, flexShrink: 0,
+                      }} />
+                    )}
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
+                    {opt.emphasis.map(e => (
+                      <span key={e} style={{
+                        fontFamily: 'var(--f-mono)', fontSize: 9,
+                        background: pitchFocus === opt.id ? `${opt.color}20` : 'var(--surface2)',
+                        color: pitchFocus === opt.id ? opt.color : 'var(--dim)',
+                        padding: '2px 8px', borderRadius: 10,
+                        transition: 'all 0.2s',
+                      }}>{e}</span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Focus result: Before / After */}
+            {focusLoading && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '40px 0', color: 'var(--sub)' }}>
+                <span className="spin-ring" />
+                <span style={{ fontFamily: 'var(--f-mono)', fontSize: 12 }}>
+                  REWRITING FOR {PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)?.label.toUpperCase()}...
+                </span>
+              </div>
+            )}
+
+            {focusResult && !focusLoading && (
+              <div style={{ animation: 'focusCardIn 0.4s ease' }}>
+                {/* Key message banner */}
+                {focusResult.keyMessage && (
+                  <div style={{
+                    background: `${PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)?.color}10`,
+                    border: `1px solid ${PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)?.color}44`,
+                    borderRadius: 'var(--r-lg)', padding: '14px 18px', marginBottom: 20,
+                    display: 'flex', gap: 12, alignItems: 'flex-start',
+                  }}>
+                    <span style={{ fontSize: 16 }}>🎯</span>
+                    <div>
+                      <div style={{ fontFamily: 'var(--f-mono)', fontSize: 9, color: PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)?.color, letterSpacing: 2, marginBottom: 4 }}>
+                        KEY MESSAGE FOR {focusResult.focusTitle?.toUpperCase()}
+                      </div>
+                      <div style={{ fontSize: 14, color: 'var(--text)', lineHeight: 1.55, fontStyle: 'italic' }}>
+                        "{focusResult.keyMessage}"
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Before / After sections */}
+                {(focusResult.sections || []).map((s, i) => (
+                  <div key={i} className="card" style={{ marginBottom: 14, animation: `beforeAfterSlide 0.4s ease ${i * 0.1}s both` }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
+                      <div style={{ fontFamily: 'var(--f-display)', fontSize: 16, letterSpacing: 0.5 }}>{s.section}</div>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
+                      {/* BEFORE */}
+                      <div style={{
+                        background: 'rgba(229,9,20,0.04)',
+                        border: '1px solid rgba(229,9,20,0.15)',
+                        borderLeft: '3px solid rgba(229,9,20,0.5)',
+                        borderRadius: 'var(--r)', padding: '14px 16px',
+                      }}>
+                        <div style={{
+                          fontFamily: 'var(--f-mono)', fontSize: 9, color: 'var(--cuban)',
+                          letterSpacing: 2, marginBottom: 8,
+                          display: 'flex', alignItems: 'center', gap: 5,
+                        }}>
+                          ✗ BEFORE
+                        </div>
+                        <div style={{ fontSize: 13, color: 'var(--sub)', lineHeight: 1.65, fontStyle: 'italic' }}>
+                          {s.before}
+                        </div>
+                      </div>
+
+                      {/* AFTER */}
+                      <div style={{
+                        background: 'rgba(46,204,113,0.04)',
+                        border: '1px solid rgba(46,204,113,0.2)',
+                        borderLeft: `3px solid ${PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)?.color || 'var(--vc)'}`,
+                        borderRadius: 'var(--r)', padding: '14px 16px',
+                      }}>
+                        <div style={{
+                          fontFamily: 'var(--f-mono)', fontSize: 9,
+                          color: PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)?.color || 'var(--vc)',
+                          letterSpacing: 2, marginBottom: 8,
+                          display: 'flex', alignItems: 'center', gap: 5,
+                        }}>
+                          ✓ AFTER ({PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)?.label.toUpperCase()})
+                        </div>
+                        <div style={{ fontSize: 13, color: 'var(--text)', lineHeight: 1.65, fontStyle: 'italic', fontWeight: 400 }}>
+                          {s.after}
+                        </div>
+                      </div>
+                    </div>
+
+                    {s.note && (
+                      <div style={{
+                        fontFamily: 'var(--f-mono)', fontSize: 10,
+                        color: PITCH_FOCUS_OPTIONS.find(f => f.id === pitchFocus)?.color || 'var(--vc)',
+                      }}>
+                        💡 {s.note}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* REWRITE TAB — existing, unchanged */}
         {activeTab === 'rewrite' && (
           <div className="fu2">
             {rewriteLoading ? (
@@ -254,7 +544,6 @@ Return ONLY valid JSON (no markdown fences):
               </div>
             ) : (
               <>
-                {/* Framing note */}
                 <div style={{
                   fontFamily: 'var(--f-mono)', fontSize: 10, color: 'var(--dim)',
                   marginBottom: 18, padding: '8px 14px',
@@ -295,7 +584,7 @@ Return ONLY valid JSON (no markdown fences):
           </div>
         )}
 
-        {/* Script Tab */}
+        {/* SCRIPT TAB — unchanged */}
         {activeTab === 'script' && (
           <div className="fu2">
             <div className="card">
@@ -320,7 +609,7 @@ Return ONLY valid JSON (no markdown fences):
           </div>
         )}
 
-        {/* MCP Tab */}
+        {/* MCP TAB — unchanged */}
         {activeTab === 'mcp' && (
           <div className="fu2">
             <div className="card" style={{ marginBottom: 20 }}>
