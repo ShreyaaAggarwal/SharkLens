@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🦈 SharkLens
+#  SharkLens
 ### *Face the Sharks Before You Face the Real Ones.*
 
 [![Live Demo](https://img.shields.io/badge/🚀_Live_Demo-SharkLens-red?style=for-the-badge)](https://shark-lens.vercel.app/)
@@ -78,7 +78,7 @@ It is investor readiness training.
 
 ---
 
-# 🚀 Overview
+#  Overview
 
 SharkLens is an AI-powered startup pitch coaching platform that combines:
 
@@ -114,7 +114,7 @@ Each investor behaves differently, forcing founders to adapt in real time.
 
 ---
 
-## 🏛 Boardroom Mode
+##  Boardroom Mode
 
 Instead of talking to a single AI avatar, founders can create an investor panel and simulate a real boardroom environment.
 
@@ -130,7 +130,7 @@ This transforms practice sessions into realistic fundraising simulations.
 
 ---
 
-## 📊 Real-Time Confidence Engine
+##  Real-Time Confidence Engine
 
 SharkLens continuously calculates a confidence score during the pitch.
 
@@ -148,7 +148,7 @@ A live confidence score that updates throughout the session.
 
 ---
 
-## 👁 Eye Contact Tracking
+##  Eye Contact Tracking
 
 Investor trust is heavily influenced by visual engagement.
 
@@ -162,7 +162,7 @@ Founders immediately see whether they are maintaining strong engagement througho
 
 ---
 
-## 💬 Filler Word Detection
+##  Filler Word Detection
 
 The platform identifies communication patterns that weaken investor confidence.
 
@@ -179,7 +179,7 @@ Instead of generic feedback, founders receive quantified filler-word analytics.
 
 ---
 
-## 😊 Emotion Intelligence
+##  Emotion Intelligence
 
 SharkLens evaluates emotional delivery and speaking presence.
 
@@ -211,7 +211,7 @@ The radar visualization provides an instant understanding of strengths and weakn
 
 ---
 
-## 🧠 AI Pitch Optimizer
+##  AI Pitch Optimizer
 
 After the session ends, SharkLens generates actionable improvement insights.
 
@@ -226,7 +226,7 @@ This transforms feedback into a structured improvement plan.
 
 ---
 
-## ⚡ AI Hint System
+##  AI Hint System
 
 Founders can request contextual coaching during practice sessions.
 
@@ -241,7 +241,7 @@ The result is a guided learning experience rather than passive evaluation.
 
 ---
 
-## 📂 Deck Intelligence
+##  Deck Intelligence
 
 Users can upload startup decks before pitching.
 
@@ -256,7 +256,7 @@ This allows investors and analytics systems to provide more relevant feedback.
 
 ---
 
-## 🔄 MCP Automation Pipeline
+##  MCP Automation Pipeline
 
 SharkLens extends beyond coaching.
 
@@ -271,7 +271,7 @@ This turns SharkLens into an intelligent founder workflow assistant.
 
 ---
 
-# 🏗 System Architecture
+#  System Architecture
 
 ```text
                  ┌─────────────────────┐
@@ -305,7 +305,7 @@ This turns SharkLens into an intelligent founder workflow assistant.
 
 ---
 
-# 🧠 AI Workflow
+#  AI Workflow
 
 ```text
 Pitch Deck Upload
@@ -338,7 +338,7 @@ Actionable Founder Insights
 
 ---
 
-# 💻 Tech Stack
+#  Tech Stack
 
 ## Frontend
 
@@ -374,7 +374,7 @@ Actionable Founder Insights
 
 ---
 
-# 📁 Project Structure
+#  Project Structure
 
 ```text
 frontend/
@@ -448,7 +448,7 @@ npm run dev
 
 ---
 
-# 🔐 Environment Variables
+#  Environment Variables
 
 ### Frontend
 
@@ -484,7 +484,7 @@ FRONTEND_URL=
 
 ---
 
-# ⚡ Performance Optimizations
+#  Performance Optimizations
 
 - Lightweight Vite architecture
 - Modular component design
@@ -497,7 +497,7 @@ FRONTEND_URL=
 
 ---
 
-# 🏆 What Makes SharkLens Different?
+#  What Makes SharkLens Different?
 
 Most pitch tools answer:
 
@@ -524,7 +524,7 @@ This combination creates a far more realistic representation of investor readine
 
 ---
 
-# 🚧 Challenges We Solved
+#  Challenges We Solved
 
 ### Real-Time Analytics
 
@@ -548,7 +548,7 @@ Measuring communication effectiveness beyond simple speech recognition.
 
 ---
 
-# 📈 Scalability Considerations
+#  Scalability Considerations
 
 SharkLens has been designed with future expansion in mind.
 
@@ -580,7 +580,7 @@ Future roadmap includes:
 
 ---
 
-# 🎤 Overall
+#  Overall
 
 **SharkLens is an AI-powered investor simulation platform that helps founders practice fundraising conversations before they happen.**
 
@@ -593,7 +593,7 @@ The platform combines investor simulation, behavioral analytics, pitch optimizat
 
 <div align="center">
 
-### 🦈 Practice. Analyze. Improve. Fundraise.
+###  Practice. Analyze. Improve. Fundraise.
 
 **SharkLens — Face the Sharks Before You Face the Real Ones.**
 
