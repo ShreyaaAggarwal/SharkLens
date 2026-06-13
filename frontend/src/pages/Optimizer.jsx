@@ -681,7 +681,7 @@ Return ONLY valid JSON (no markdown fences, no preamble):
                 ))
               ) : (
                 <div style={{ fontFamily: 'var(--f-mono)', fontSize: 11, color: 'var(--dim)', padding: '20px 0', textAlign: 'center' }}>
-                  Use the 🎯 PITCH FOCUS tab for a full investor-ready script tailored to a specific investor type.
+                  Use the PITCH FOCUS tab for a full investor-ready script tailored to a specific investor type.
                 </div>
               )}
             </div>
