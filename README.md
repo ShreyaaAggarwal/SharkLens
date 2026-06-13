@@ -194,7 +194,7 @@ This helps founders understand how investors may perceive them during the pitch.
 
 ---
 
-## 📈 Performance Radar
+##  Performance Radar
 
 Every session generates a multi-dimensional performance breakdown.
 
@@ -472,7 +472,7 @@ FRONTEND_URL=
 
 ---
 
-# 🔌 Integrations
+#  Integrations
 
 | Integration | Purpose |
 |-------------|----------|
@@ -565,7 +565,7 @@ Potential scaling paths:
 
 ---
 
-# 🌍 Built For The Future
+#  Built For The Future
 
 Future roadmap includes:
 
